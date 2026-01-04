@@ -138,10 +138,16 @@ export function OnboardingTour() {
     return null;
   }
 
-  // DISABLED: Auto-show onboarding for non-participants too
+  // Auto-show onboarding for new users after workspace creation
   useEffect(() => {
-    // Do nothing - tour disabled
-  }, []);
+    const hasSeenTour = localStorage.getItem("hasSeenTour");
+    const activeWorkspaceId = useQDAStore.getState().activeWorkspaceId;
+
+    if (!hasSeenTour && activeWorkspaceId) {
+      startOnboarding();
+      localStorage.setItem("hasSeenTour", "true");
+    }
+  }, [startOnboarding]);
 
   const handleJoyrideCallback = (data: CallBackProps) => {
     const { status } = data;
