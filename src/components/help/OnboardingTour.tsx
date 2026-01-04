@@ -144,10 +144,10 @@ export function OnboardingTour() {
     const activeWorkspaceId = useQDAStore.getState().activeWorkspaceId;
 
     if (!hasSeenTour && activeWorkspaceId) {
-      startOnboarding();
+      setShowOnboarding(true);
       localStorage.setItem("hasSeenTour", "true");
     }
-  }, [startOnboarding]);
+  }, [setShowOnboarding]);
 
   const handleJoyrideCallback = (data: CallBackProps) => {
     const { status } = data;
