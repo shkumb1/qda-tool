@@ -207,7 +207,7 @@ export function LeftSidebar() {
           <div className="w-8 h-8 rounded-lg bg-accent flex items-center justify-center">
             <Code2 className="h-5 w-5 text-accent-foreground" />
           </div>
-          QDA Tool
+          ThematicFlow
         </h1>
         <p className="text-xs text-sidebar-foreground/60 mt-1">
           Qualitative Data Analysis

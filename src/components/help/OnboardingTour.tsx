@@ -9,7 +9,7 @@ const TOUR_STEPS: Step[] = [
     content: (
       <div>
         <h2 className="text-lg font-bold mb-2">
-          Welcome to Insight Weaver! 👋
+          Welcome to ThematicFlow! 👋
         </h2>
         <p>
           Let's take a quick tour to help you get started with qualitative data

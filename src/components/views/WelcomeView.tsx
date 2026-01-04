@@ -148,7 +148,7 @@ export function WelcomeView() {
             <BookOpen className="w-10 h-10 text-primary" />
           </div>
           <h1 className="text-4xl font-bold tracking-tight">
-            Welcome to Insight Weaver
+            Welcome to ThematicFlow
           </h1>
           <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
             A powerful qualitative data analysis tool for researchers,
