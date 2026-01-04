@@ -36,6 +36,7 @@ export function DocumentViewer() {
     documents,
     activeDocumentId,
     activeStudyId,
+    getActiveWorkspace,
     codes,
     excerpts,
     currentSelection,
@@ -47,6 +48,9 @@ export function DocumentViewer() {
     addDocument,
     logAction,
   } = useQDAStore();
+
+  const workspace = getActiveWorkspace();
+  const aiEnabled = workspace?.aiEnabled ?? true; // Default to true if not set
 
   const [popoverOpen, setPopoverOpen] = useState(false);
   const [popoverPosition, setPopoverPosition] = useState({ x: 0, y: 0 });
