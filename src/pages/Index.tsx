@@ -6,7 +6,6 @@ import { RefinerView } from "@/components/views/RefinerView";
 import { ThemesView } from "@/components/views/ThemesView";
 import { VisualizationsView } from "@/components/views/VisualizationsView";
 import { AnalyticsView } from "@/components/views/AnalyticsView";
-import { URLGenerator } from "@/components/views/URLGenerator";
 import { StudiesDashboard } from "@/components/views/StudiesDashboard";
 import { WelcomeView } from "@/components/views/WelcomeView";
 import { WorkspaceSelector } from "@/components/views/WorkspaceSelector";

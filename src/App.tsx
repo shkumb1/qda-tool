@@ -6,7 +6,6 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { HelpModal } from "@/components/help/HelpModal";
 import { KeyboardShortcutsModal } from "@/components/help/KeyboardShortcutsModal";
 import { OnboardingTour } from "@/components/help/OnboardingTour";
-import { URLGenerator } from "@/components/views/URLGenerator";
 import { AdminLogin } from "@/components/views/AdminLogin";
 import { AdminDashboard } from "@/components/views/AdminDashboard";
 import { useState, useEffect } from "react";
