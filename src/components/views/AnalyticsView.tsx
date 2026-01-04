@@ -14,7 +14,13 @@ export function AnalyticsView() {
   } = useQDAStore();
 
   const workspace = getActiveWorkspace();
-  const metrics = getResearchMetrics();
+  
+  let metrics = null;
+  try {
+    metrics = getResearchMetrics();
+  } catch (error) {
+    console.error('Error calculating metrics:', error);
+  }
 
   if (!workspace?.researchMode) {
     return (

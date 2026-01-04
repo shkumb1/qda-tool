@@ -1174,40 +1174,55 @@ export const useQDAStore = create<QDAState>()(
         
         if (!workspace?.researchMode || !workspace.participantId) return null;
 
-        const logs = state.analyticsLogs.filter(
-          log => log.workspaceId === state.activeWorkspaceId
-        );
+        try {
+          const logs = state.analyticsLogs.filter(
+            log => log.workspaceId === state.activeWorkspaceId
+          );
 
-        const excerptCreated = logs.filter(l => l.action === 'excerpt_created');
-        const aiRequested = logs.filter(l => l.action === 'ai_suggestion_requested');
-        const aiAccepted = logs.filter(l => l.action === 'ai_suggestion_accepted');
-        const aiRejected = logs.filter(l => l.action === 'ai_suggestion_rejected');
-        
-        const sessionStart = logs.find(l => l.action === 'session_started');
-        const sessionEnd = logs.find(l => l.action === 'session_ended');
-        
-        // Handle dates that might be strings from localStorage
-        const startTime = sessionStart?.timestamp 
-          ? new Date(sessionStart.timestamp)
-          : state.sessionStartTime 
-          ? new Date(state.sessionStartTime)
-          : new Date();
-        const endTime = sessionEnd?.timestamp ? new Date(sessionEnd.timestamp) : null;
-        const totalTime = endTime 
-          ? endTime.getTime() - startTime.getTime()
-          : Date.now() - startTime.getTime();
+          const excerptCreated = logs.filter(l => l.action === 'excerpt_created');
+          const aiRequested = logs.filter(l => l.action === 'ai_suggestion_requested');
+          const aiAccepted = logs.filter(l => l.action === 'ai_suggestion_accepted');
+          const aiRejected = logs.filter(l => l.action === 'ai_suggestion_rejected');
+          
+          const sessionStart = logs.find(l => l.action === 'session_started');
+          const sessionEnd = logs.find(l => l.action === 'session_ended');
+          
+          // Handle dates that might be strings from localStorage - be very defensive
+          let startTime = new Date();
+          if (sessionStart?.timestamp) {
+            startTime = new Date(sessionStart.timestamp);
+          } else if (state.sessionStartTime) {
+            startTime = new Date(state.sessionStartTime);
+          }
+          
+          let endTime = null;
+          if (sessionEnd?.timestamp) {
+            endTime = new Date(sessionEnd.timestamp);
+          }
+          
+          // Validate dates
+          if (isNaN(startTime.getTime())) {
+            startTime = new Date();
+          }
+          if (endTime && isNaN(endTime.getTime())) {
+            endTime = null;
+          }
+          
+          const totalTime = endTime 
+            ? endTime.getTime() - startTime.getTime()
+            : Date.now() - startTime.getTime();
 
-        const uniqueCodes = new Set(state.codes.map(c => c.id)).size;
-        const totalExcerpts = state.excerpts.length;
-        const totalCodes = state.codes.length;
-        const totalTextCoded = state.excerpts.reduce((sum, e) => sum + (e.text?.length || 0), 0);
+          const uniqueCodes = new Set(state.codes.map(c => c.id)).size;
+          const totalExcerpts = state.excerpts.length;
+          const totalCodes = state.codes.length;
+          const totalTextCoded = state.excerpts.reduce((sum, e) => sum + (e.text?.length || 0), 0);
 
-        const metrics: ResearchMetrics = {
-          participantId: workspace.participantId,
-          workspaceId: workspace.id,
-          startTime,
-          endTime,
-          totalExcerpts,
+          const metrics: ResearchMetrics = {
+            participantId: workspace.participantId,
+            workspaceId: workspace.id,
+            startTime,
+            endTime,
+            totalExcerpts,
           totalCodes,
           uniqueCodes,
           averageCodesPerExcerpt: totalExcerpts > 0 ? totalCodes / totalExcerpts : 0,
@@ -1225,6 +1240,10 @@ export const useQDAStore = create<QDAState>()(
         };
 
         return metrics;
+        } catch (error) {
+          console.error('Error calculating research metrics:', error);
+          return null;
+        }
       },
 
       exportResearchData: () => {
