@@ -30,6 +30,9 @@ const Index = () => {
 
   // Get studies for current workspace
   const workspaceStudies = getWorkspaceStudies();
+  
+  // Check if participant mode (configured via URL)
+  const isParticipantMode = new URLSearchParams(window.location.search).has('participantId');
 
   // Handle URL parameters for research configuration
   useEffect(() => {
@@ -64,14 +67,11 @@ const Index = () => {
         // Start session if enabling research mode
         if (participantId && !workspace?.researchMode) {
           startSession();
-          toast({
-            title: "Research Mode Activated",
-            description: `Participant: ${participantId} | AI: ${settings.aiEnabled ? "Enabled" : "Disabled"}`,
-          });
+          // Don't show toast for participants to avoid confusion
         }
       }
     }
-  }, [activeWorkspaceId, getActiveWorkspace, updateWorkspaceResearchSettings, startSession, toast]);
+  }, [activeWorkspaceId, getActiveWorkspace, updateWorkspaceResearchSettings, startSession]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -129,6 +129,8 @@ const Index = () => {
       return <StudiesDashboard />;
     }
 
+    const isParticipantMode = new URLSearchParams(window.location.search).has('participantId');
+
     switch (activeView) {
       case "dashboard":
         return <StudiesDashboard />;
@@ -143,6 +145,10 @@ const Index = () => {
       case "visualizations":
         return <VisualizationsView />;
       case "analytics":
+        // Block analytics for participants
+        if (isParticipantMode) {
+          return <DocumentViewer />;
+        }
         return <AnalyticsView />;
       default:
         return <DocumentViewer />;

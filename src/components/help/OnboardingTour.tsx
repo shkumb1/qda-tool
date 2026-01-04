@@ -129,10 +129,18 @@ export function OnboardingTour() {
   } = useHelpStore();
   const { studies, activeWorkspaceId } = useQDAStore();
 
-  // DISABLED: Auto-show onboarding
-  // Only show if manually triggered from Help menu
+  // Check if participant mode - completely disable tour
+  const isParticipantMode = typeof window !== 'undefined' && 
+    new URLSearchParams(window.location.search).has('participantId');
+
+  // Block tour completely for participants
+  if (isParticipantMode) {
+    return null;
+  }
+
+  // DISABLED: Auto-show onboarding for non-participants too
   useEffect(() => {
-    // Do nothing - tour disabled for research mode
+    // Do nothing - tour disabled
   }, []);
 
   const handleJoyrideCallback = (data: CallBackProps) => {
