@@ -1186,8 +1186,13 @@ export const useQDAStore = create<QDAState>()(
         const sessionStart = logs.find(l => l.action === 'session_started');
         const sessionEnd = logs.find(l => l.action === 'session_ended');
         
-        const startTime = sessionStart?.timestamp || state.sessionStartTime || new Date();
-        const endTime = sessionEnd?.timestamp;
+        // Handle dates that might be strings from localStorage
+        const startTime = sessionStart?.timestamp 
+          ? new Date(sessionStart.timestamp)
+          : state.sessionStartTime 
+          ? new Date(state.sessionStartTime)
+          : new Date();
+        const endTime = sessionEnd?.timestamp ? new Date(sessionEnd.timestamp) : null;
         const totalTime = endTime 
           ? endTime.getTime() - startTime.getTime()
           : Date.now() - startTime.getTime();
@@ -1237,7 +1242,7 @@ export const useQDAStore = create<QDAState>()(
           .filter(log => log.workspaceId === state.activeWorkspaceId)
           .forEach(log => {
             const row = [
-              log.timestamp.toISOString(),
+              new Date(log.timestamp).toISOString(),
               log.participantId || '',
               log.action,
               log.details.documentId || '',
