@@ -12,6 +12,7 @@ import { WorkspaceSelector } from "@/components/views/WorkspaceSelector";
 import { useQDAStore } from "@/store/qdaStore";
 import { useHelpStore } from "@/store/helpStore";
 import { useToast } from "@/hooks/use-toast";
+import { checkAndClearForParticipant } from "@/utils/clearStorage";
 
 const Index = () => {
   const { toast } = useToast();
@@ -33,6 +34,11 @@ const Index = () => {
   
   // Check if participant mode (configured via URL)
   const isParticipantMode = new URLSearchParams(window.location.search).has('participantId');
+
+  // Clear old data for fresh participant sessions
+  useEffect(() => {
+    checkAndClearForParticipant();
+  }, []);
 
   // Handle URL parameters for research configuration
   useEffect(() => {
