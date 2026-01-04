@@ -63,6 +63,8 @@ export function TopNavigation() {
   const { setHelpModalOpen, setKeyboardShortcutsOpen, setShowOnboarding } =
     useHelpStore();
 
+  const workspace = getActiveWorkspace();
+  const aiEnabled = workspace?.aiEnabled ?? true;
   const studies = getWorkspaceStudies();
   const activeStudy = studies.find((s) => s.id === activeStudyId);
 
@@ -215,10 +217,12 @@ export function TopNavigation() {
         </DropdownMenu>
 
         {/* AI Assistant Button */}
-        <Button variant="outline" size="sm" className="gap-2">
-          <Sparkles className="h-4 w-4 text-accent" />
-          AI Assist
-        </Button>
+        {aiEnabled && (
+          <Button variant="outline" size="sm" className="gap-2">
+            <Sparkles className="h-4 w-4 text-accent" />
+            AI Assist
+          </Button>
+        )}
 
         {/* Export/Import */}
         {activeStudy && (
