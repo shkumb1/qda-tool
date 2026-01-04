@@ -196,29 +196,58 @@ export function AdminDashboard({ onLogout }: AdminDashboardProps) {
           <TabsContent value="analytics" className="mt-6">
             <Card>
               <CardHeader>
-                <CardTitle>Research Analytics</CardTitle>
+                <CardTitle>Research Workflow</CardTitle>
                 <CardDescription>
-                  Collect CSV exports from participants for analysis
+                  How to collect and analyze participant data
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  <div className="text-center py-12 text-muted-foreground">
-                    <BarChart3 className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p className="font-medium mb-2">No centralized analytics available</p>
-                    <p className="text-sm">Each participant exports their own CSV file from their session.</p>
-                    <p className="text-sm mt-2">Collect all CSV files and analyze them using Excel, SPSS, or Python.</p>
-                  </div>
-                  
-                  <div className="rounded-lg border border-accent bg-accent/10 p-4 space-y-2">
-                    <h4 className="font-medium text-sm">How to Collect Data:</h4>
-                    <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside">
-                      <li>Participants complete their coding session</li>
-                      <li>They click Analytics → Export Research Data</li>
-                      <li>CSV file downloads to their computer</li>
-                      <li>They send you the CSV file via email</li>
-                      <li>You aggregate all CSVs for analysis</li>
+                <div className="space-y-6">
+                  {/* Workflow Steps */}
+                  <div className="rounded-lg border p-4 space-y-3">
+                    <h4 className="font-medium">Study Procedure:</h4>
+                    <ol className="space-y-2 list-decimal list-inside text-sm">
+                      <li><strong>Send URLs</strong> - Give each participant their unique URL with participant ID</li>
+                      <li><strong>Set Timer</strong> - Give them 10 minutes (or your chosen duration)</li>
+                      <li><strong>Participants Code</strong> - They upload documents, create codes, and analyze text</li>
+                      <li><strong>Export Data</strong> - After time is up, they click "Analytics" → "Export Research Data"</li>
+                      <li><strong>Collect CSVs</strong> - Participants send you their downloaded CSV file</li>
+                      <li><strong>Analyze</strong> - Aggregate all CSVs in Excel/SPSS/Python for statistical analysis</li>
                     </ol>
+                  </div>
+
+                  {/* What's in the CSV */}
+                  <div className="rounded-lg border border-accent bg-accent/10 p-4 space-y-3">
+                    <h4 className="font-medium text-sm">CSV Contains:</h4>
+                    <div className="grid grid-cols-2 gap-3 text-xs">
+                      <div>
+                        <p className="font-medium mb-1">Summary Metrics:</p>
+                        <ul className="space-y-0.5 text-muted-foreground list-disc list-inside">
+                          <li>Total excerpts coded</li>
+                          <li>Total codes created</li>
+                          <li>Coding speed (excerpts/hour)</li>
+                          <li>Active time spent</li>
+                          <li>Documents processed</li>
+                        </ul>
+                      </div>
+                      <div>
+                        <p className="font-medium mb-1">AI Metrics (if enabled):</p>
+                        <ul className="space-y-0.5 text-muted-foreground list-disc list-inside">
+                          <li>AI suggestions requested</li>
+                          <li>AI suggestions accepted</li>
+                          <li>AI acceptance rate</li>
+                          <li>Confidence scores</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Example Analysis */}
+                  <div className="text-xs text-muted-foreground space-y-1">
+                    <p className="font-medium">Example Comparison:</p>
+                    <p>• AI Group: Average 25 excerpts in 10 min (85% AI acceptance)</p>
+                    <p>• No-AI Group: Average 18 excerpts in 10 min</p>
+                    <p>→ Statistical test shows AI significantly improves coding efficiency</p>
                   </div>
                 </div>
               </CardContent>
