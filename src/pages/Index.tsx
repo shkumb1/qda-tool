@@ -129,8 +129,6 @@ const Index = () => {
       return <StudiesDashboard />;
     }
 
-    const isParticipantMode = new URLSearchParams(window.location.search).has('participantId');
-
     switch (activeView) {
       case "dashboard":
         return <StudiesDashboard />;
@@ -145,10 +143,6 @@ const Index = () => {
       case "visualizations":
         return <VisualizationsView />;
       case "analytics":
-        // Block analytics for participants
-        if (isParticipantMode) {
-          return <DocumentViewer />;
-        }
         return <AnalyticsView />;
       default:
         return <DocumentViewer />;
