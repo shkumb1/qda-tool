@@ -261,8 +261,10 @@ export function TopNavigation() {
           )}
         </Button>
 
-        {/* Workspace Settings */}
-        {activeStudy && <WorkspaceSettings />}
+        {/* Workspace Settings - Hidden when configured via URL */}
+        {activeStudy && !new URLSearchParams(window.location.search).has('participantId') && (
+          <WorkspaceSettings />
+        )}
 
         {/* Workspace Info & Collaborators */}
         {currentCollaborator && (
