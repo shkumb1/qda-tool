@@ -107,15 +107,10 @@ export function LeftSidebar() {
 
   const workspace = getActiveWorkspace();
 
-  // Check if participant mode (configured via URL parameters)
-  const isParticipantMode = new URLSearchParams(window.location.search).has('participantId');
-  
   // Conditional navigation based on active study and research mode
   const visibleNavItems = activeStudyId
     ? NAV_ITEMS.filter(item => {
-        // Completely hide analytics for participants
-        if (isParticipantMode && item.id === "analytics") return false;
-        // Otherwise show research items only if research mode enabled
+        // Show research items only if research mode enabled
         return !item.researchOnly || workspace?.researchMode;
       })
     : NAV_ITEMS.filter((item) => item.id === "dashboard");
