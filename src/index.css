@@ -1,0 +1,260 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+@layer base {
+  :root {
+    --background: 210 20% 98%;
+    --foreground: 222 47% 11%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+
+    --primary: 222 47% 20%;
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 210 20% 94%;
+    --secondary-foreground: 222 47% 20%;
+
+    --muted: 210 20% 96%;
+    --muted-foreground: 215 16% 47%;
+
+    --accent: 24 95% 53%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 24 95% 53%;
+
+    --radius: 0.5rem;
+
+    /* QDA-specific colors */
+    --code-main: 217 91% 60%;
+    --code-main-bg: 217 91% 95%;
+    --code-child: 142 76% 45%;
+    --code-child-bg: 142 76% 95%;
+    --code-subchild: 45 93% 47%;
+    --code-subchild-bg: 45 93% 95%;
+    
+    --theme-1: 340 82% 52%;
+    --theme-2: 262 83% 58%;
+    --theme-3: 199 89% 48%;
+    --theme-4: 142 76% 45%;
+    --theme-5: 24 95% 53%;
+
+    --highlight-1: 217 91% 85%;
+    --highlight-2: 142 76% 85%;
+    --highlight-3: 45 93% 85%;
+    --highlight-4: 340 82% 85%;
+    --highlight-5: 262 83% 85%;
+
+    --sidebar-background: 222 47% 11%;
+    --sidebar-foreground: 210 40% 96%;
+    --sidebar-primary: 24 95% 53%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 222 47% 18%;
+    --sidebar-accent-foreground: 210 40% 96%;
+    --sidebar-border: 222 47% 20%;
+    --sidebar-ring: 24 95% 53%;
+
+    --panel-resize: 214 32% 85%;
+  }
+
+  .dark {
+    --background: 222 47% 8%;
+    --foreground: 210 40% 98%;
+
+    --card: 222 47% 11%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 222 47% 11%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 210 40% 98%;
+    --primary-foreground: 222 47% 11%;
+
+    --secondary: 222 47% 15%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 222 47% 15%;
+    --muted-foreground: 215 20% 65%;
+
+    --accent: 24 95% 53%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 63% 31%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 222 47% 20%;
+    --input: 222 47% 20%;
+    --ring: 24 95% 53%;
+
+    --code-main-bg: 217 91% 20%;
+    --code-child-bg: 142 76% 20%;
+    --code-subchild-bg: 45 93% 20%;
+
+    --highlight-1: 217 91% 30%;
+    --highlight-2: 142 76% 30%;
+    --highlight-3: 45 93% 30%;
+    --highlight-4: 340 82% 30%;
+    --highlight-5: 262 83% 30%;
+
+    --sidebar-background: 222 47% 6%;
+    --sidebar-foreground: 210 40% 96%;
+    --sidebar-accent: 222 47% 12%;
+    --sidebar-border: 222 47% 15%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-family: 'IBM Plex Sans', system-ui, sans-serif;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-semibold tracking-tight;
+  }
+}
+
+@layer components {
+  .code-chip {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all duration-200;
+  }
+
+  .code-chip-main {
+    @apply bg-[hsl(var(--code-main-bg))] text-[hsl(var(--code-main))] border border-[hsl(var(--code-main)/0.3)];
+  }
+
+  .code-chip-child {
+    @apply bg-[hsl(var(--code-child-bg))] text-[hsl(var(--code-child))] border border-[hsl(var(--code-child)/0.3)];
+  }
+
+  .code-chip-subchild {
+    @apply bg-[hsl(var(--code-subchild-bg))] text-[hsl(var(--code-subchild))] border border-[hsl(var(--code-subchild)/0.3)];
+  }
+
+  .highlight-block {
+    @apply relative px-1 py-0.5 rounded cursor-pointer transition-all duration-200;
+    background: linear-gradient(135deg, hsl(var(--highlight-1)) 0%, hsl(var(--highlight-1)/0.7) 100%);
+    box-shadow: inset 0 0 0 2px hsl(var(--code-main)/0.3);
+  }
+
+  .highlight-block:hover {
+    box-shadow: inset 0 0 0 2px hsl(var(--code-main)/0.6), 0 2px 8px hsl(var(--code-main)/0.2);
+  }
+
+  .highlight-block-child {
+    background: linear-gradient(135deg, hsl(var(--highlight-2)) 0%, hsl(var(--highlight-2)/0.7) 100%);
+    box-shadow: inset 0 0 0 2px hsl(var(--code-child)/0.3);
+  }
+
+  .highlight-block-child:hover {
+    box-shadow: inset 0 0 0 2px hsl(var(--code-child)/0.6), 0 2px 8px hsl(var(--code-child)/0.2);
+  }
+
+  .highlight-block-subchild {
+    background: linear-gradient(135deg, hsl(var(--highlight-3)) 0%, hsl(var(--highlight-3)/0.7) 100%);
+    box-shadow: inset 0 0 0 2px hsl(var(--code-subchild)/0.3);
+  }
+
+  .highlight-block-subchild:hover {
+    box-shadow: inset 0 0 0 2px hsl(var(--code-subchild)/0.6), 0 2px 8px hsl(var(--code-subchild)/0.2);
+  }
+
+  .panel-section {
+    @apply bg-card rounded-lg border border-border shadow-sm;
+  }
+
+  .panel-header {
+    @apply flex items-center justify-between px-4 py-3 border-b border-border bg-muted/30;
+  }
+
+  .panel-title {
+    @apply text-sm font-semibold text-foreground;
+  }
+
+  .sidebar-item {
+    @apply flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors cursor-pointer;
+  }
+
+  .sidebar-item-active {
+    @apply bg-sidebar-accent text-sidebar-primary font-medium;
+  }
+
+  .nav-tab {
+    @apply px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground border-b-2 border-transparent transition-all;
+  }
+
+  .nav-tab-active {
+    @apply text-accent border-accent;
+  }
+
+  .drag-preview {
+    @apply bg-card border-2 border-accent border-dashed rounded-lg p-2 opacity-90;
+  }
+
+  .drop-zone {
+    @apply border-2 border-dashed border-border rounded-lg transition-colors;
+  }
+
+  .drop-zone-active {
+    @apply border-accent bg-accent/5;
+  }
+
+  .tooltip-content {
+    @apply bg-foreground text-background px-2 py-1 rounded text-xs shadow-lg;
+  }
+
+  .glass-panel {
+    @apply bg-background/80 backdrop-blur-sm border border-border/50;
+  }
+
+  .selection-popup {
+    @apply absolute z-50 bg-card border border-border rounded-lg shadow-xl p-2 animate-in fade-in-0 zoom-in-95;
+  }
+}
+
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    @apply bg-border rounded-full hover:bg-muted-foreground/30;
+  }
+
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .animate-pulse-subtle {
+    animation: pulse-subtle 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse-subtle {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+  }
+}
