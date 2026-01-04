@@ -510,24 +510,25 @@ export function DocumentViewer() {
             </div>
 
             {/* AI Suggestions */}
-            <div className="mb-3">
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full gap-2 mb-2"
-                onClick={handleGetAISuggestions}
-                disabled={loadingAI}
-              >
-                {loadingAI ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Sparkles className="h-4 w-4 text-accent" />
-                )}
-                {loadingAI ? "Analyzing..." : "Get AI Suggestions"}
-              </Button>
+            {aiEnabled && (
+              <div className="mb-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full gap-2 mb-2"
+                  onClick={handleGetAISuggestions}
+                  disabled={loadingAI}
+                >
+                  {loadingAI ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-4 w-4 text-accent" />
+                  )}
+                  {loadingAI ? "Analyzing..." : "Get AI Suggestions"}
+                </Button>
 
-              {aiSuggestions.length > 0 && (
-                <div className="space-y-1 max-h-32 overflow-auto scrollbar-thin">
+                {aiSuggestions.length > 0 && (
+                  <div className="space-y-1 max-h-32 overflow-auto scrollbar-thin">
                   {aiSuggestions.map((suggestion, idx) => (
                     <button
                       key={idx}
@@ -563,7 +564,8 @@ export function DocumentViewer() {
                   ))}
                 </div>
               )}
-            </div>
+              </div>
+            )}
 
             {/* Existing Codes */}
             <div className="max-h-28 overflow-auto scrollbar-thin mb-3">
