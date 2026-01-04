@@ -127,17 +127,17 @@ export function OnboardingTour() {
     completeOnboarding,
     setShowOnboarding,
   } = useHelpStore();
-  const { studies } = useQDAStore();
+  const { studies, activeWorkspaceId } = useQDAStore();
 
-  // Auto-show onboarding for new users
+  // Auto-show onboarding for new users (only after workspace is created)
   useEffect(() => {
-    if (!hasCompletedOnboarding && studies.length === 0) {
+    if (!hasCompletedOnboarding && activeWorkspaceId && studies.length === 0) {
       const timer = setTimeout(() => {
         setShowOnboarding(true);
       }, 1000);
       return () => clearTimeout(timer);
     }
-  }, [hasCompletedOnboarding, studies.length, setShowOnboarding]);
+  }, [hasCompletedOnboarding, activeWorkspaceId, studies.length, setShowOnboarding]);
 
   const handleJoyrideCallback = (data: CallBackProps) => {
     const { status } = data;
