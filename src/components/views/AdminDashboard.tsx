@@ -198,14 +198,28 @@ export function AdminDashboard({ onLogout }: AdminDashboardProps) {
               <CardHeader>
                 <CardTitle>Research Analytics</CardTitle>
                 <CardDescription>
-                  View aggregated data from all participants
+                  Collect CSV exports from participants for analysis
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="text-center py-12 text-muted-foreground">
-                  <BarChart3 className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p>Analytics data will appear here after participants complete their sessions.</p>
-                  <p className="text-sm mt-2">Participants export CSV files from their Analytics view.</p>
+                <div className="space-y-4">
+                  <div className="text-center py-12 text-muted-foreground">
+                    <BarChart3 className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p className="font-medium mb-2">No centralized analytics available</p>
+                    <p className="text-sm">Each participant exports their own CSV file from their session.</p>
+                    <p className="text-sm mt-2">Collect all CSV files and analyze them using Excel, SPSS, or Python.</p>
+                  </div>
+                  
+                  <div className="rounded-lg border border-accent bg-accent/10 p-4 space-y-2">
+                    <h4 className="font-medium text-sm">How to Collect Data:</h4>
+                    <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside">
+                      <li>Participants complete their coding session</li>
+                      <li>They click Analytics → Export Research Data</li>
+                      <li>CSV file downloads to their computer</li>
+                      <li>They send you the CSV file via email</li>
+                      <li>You aggregate all CSVs for analysis</li>
+                    </ol>
+                  </div>
                 </div>
               </CardContent>
             </Card>

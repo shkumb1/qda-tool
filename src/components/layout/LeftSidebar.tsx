@@ -82,6 +82,7 @@ const NAV_ITEMS = [
     icon: LineChart,
     tooltip: "View research metrics",
     researchOnly: true,
+    adminOnly: true, // Only show for admin, not participants
   },
 ] as const;
 
@@ -113,8 +114,8 @@ export function LeftSidebar() {
   // Conditional navigation based on active study and research mode
   const visibleNavItems = activeStudyId
     ? NAV_ITEMS.filter(item => {
-        // Hide analytics in participant mode
-        if (isParticipantMode && item.researchOnly) return false;
+        // Hide analytics completely in participant mode
+        if (isParticipantMode && (item.researchOnly || item.adminOnly)) return false;
         // Otherwise show research items only if research mode enabled
         return !item.researchOnly || workspace?.researchMode;
       })
