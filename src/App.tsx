@@ -7,10 +7,28 @@ import { HelpModal } from "@/components/help/HelpModal";
 import { KeyboardShortcutsModal } from "@/components/help/KeyboardShortcutsModal";
 import { OnboardingTour } from "@/components/help/OnboardingTour";
 import { URLGenerator } from "@/components/views/URLGenerator";
+import { AdminLogin } from "@/components/views/AdminLogin";
+import { AdminDashboard } from "@/components/views/AdminDashboard";
+import { useState, useEffect } from "react";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
+
+function AdminRoute() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  useEffect(() => {
+    const auth = localStorage.getItem('adminAuthenticated') === 'true';
+    setIsAuthenticated(auth);
+  }, []);
+
+  if (!isAuthenticated) {
+    return <AdminLogin onLogin={() => setIsAuthenticated(true)} />;
+  }
+
+  return <AdminDashboard onLogout={() => setIsAuthenticated(false)} />;
+}
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -23,7 +41,7 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Index />} />
-          <Route path="/generate-urls" element={<URLGenerator />} />
+          <Route path="/admin" element={<AdminRoute />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

@@ -129,15 +129,11 @@ export function OnboardingTour() {
   } = useHelpStore();
   const { studies, activeWorkspaceId } = useQDAStore();
 
-  // Auto-show onboarding for new users (only after workspace is created)
+  // DISABLED: Auto-show onboarding
+  // Only show if manually triggered from Help menu
   useEffect(() => {
-    if (!hasCompletedOnboarding && activeWorkspaceId && studies.length === 0) {
-      const timer = setTimeout(() => {
-        setShowOnboarding(true);
-      }, 1000);
-      return () => clearTimeout(timer);
-    }
-  }, [hasCompletedOnboarding, activeWorkspaceId, studies.length, setShowOnboarding]);
+    // Do nothing - tour disabled for research mode
+  }, []);
 
   const handleJoyrideCallback = (data: CallBackProps) => {
     const { status } = data;
