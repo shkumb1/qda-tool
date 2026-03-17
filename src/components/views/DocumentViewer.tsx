@@ -65,7 +65,7 @@ export function DocumentViewer() {
 
   const activeDocument = documents.find((d) => d.id === activeDocumentId);
   const documentExcerpts = excerpts.filter(
-    (e) => e.documentId === activeDocumentId
+    (e) => e.documentId === activeDocumentId,
   );
 
   const handleFileUpload = useCallback(
@@ -109,7 +109,7 @@ export function DocumentViewer() {
         setImportDialogOpen(false);
       }
     },
-    [activeStudyId, addDocument, setActiveDocument, toast]
+    [activeStudyId, addDocument, setActiveDocument, toast],
   );
 
   const handleTextSelection = useCallback(() => {
@@ -165,20 +165,20 @@ export function DocumentViewer() {
   const handleGetAISuggestions = async () => {
     if (!currentSelection || !activeDocument) return;
     setLoadingAI(true);
-    
+
     // Log AI request
-    logAction('ai_suggestion_requested', {
+    logAction("ai_suggestion_requested", {
       documentId: activeDocument.id,
       excerptText: currentSelection.text.substring(0, 100),
       excerptLength: currentSelection.text.length,
     });
-    
+
     try {
       // Pass the full document content as context
       const suggestions = await suggestCodes(
         currentSelection.text,
         codes.map((c) => c.name),
-        activeDocument.content // Full document context
+        activeDocument.content, // Full document context
       );
       setAiSuggestions(suggestions);
     } catch (error) {
@@ -221,19 +221,18 @@ export function DocumentViewer() {
     setSelectedCodes((prev) =>
       prev.includes(codeId)
         ? prev.filter((id) => id !== codeId)
-        : [...prev, codeId]
+        : [...prev, codeId],
     );
   };
 
   const handleApplyAISuggestion = (suggestion: AICodeSuggestion) => {
     if (!currentSelection) return;
-
     let codeId: string;
 
     if (suggestion.existingMatch) {
       // Find existing code
       const existingCode = codes.find(
-        (c) => c.name.toLowerCase() === suggestion.existingMatch?.toLowerCase()
+        (c) => c.name.toLowerCase() === suggestion.existingMatch?.toLowerCase(),
       );
       if (existingCode) {
         codeId = existingCode.id;
@@ -249,7 +248,7 @@ export function DocumentViewer() {
     }
 
     // Log AI acceptance
-    logAction('ai_suggestion_accepted', {
+    logAction("ai_suggestion_accepted", {
       aiSuggestion: suggestion.code,
       aiConfidence: suggestion.confidence,
       suggestionAccepted: true,
@@ -279,7 +278,7 @@ export function DocumentViewer() {
 
     const content = activeDocument.content;
     const sortedExcerpts = [...documentExcerpts].sort(
-      (a, b) => a.startOffset - b.startOffset
+      (a, b) => a.startOffset - b.startOffset,
     );
 
     if (sortedExcerpts.length === 0) {
@@ -305,7 +304,7 @@ export function DocumentViewer() {
                 {i < arr.length - 1 && <br />}
               </span>
             ))}
-          </span>
+          </span>,
         );
       }
 
@@ -320,7 +319,7 @@ export function DocumentViewer() {
               className={cn(
                 "highlight-block",
                 primaryLevel === "child" && "highlight-block-child",
-                primaryLevel === "subchild" && "highlight-block-subchild"
+                primaryLevel === "subchild" && "highlight-block-subchild",
               )}
               onClick={(e) => {
                 e.stopPropagation();
@@ -350,7 +349,7 @@ export function DocumentViewer() {
               )}
             </div>
           </TooltipContent>
-        </Tooltip>
+        </Tooltip>,
       );
 
       lastEnd = excerpt.endOffset;
@@ -367,7 +366,7 @@ export function DocumentViewer() {
               {i < arr.length - 1 && <br />}
             </span>
           ))}
-        </span>
+        </span>,
       );
     }
 
@@ -444,7 +443,7 @@ export function DocumentViewer() {
   }
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col relative">
       {/* Document Header */}
       <div className="flex items-center justify-between pb-4 border-b border-border mb-4">
         <div>
@@ -529,41 +528,41 @@ export function DocumentViewer() {
 
                 {aiSuggestions.length > 0 && (
                   <div className="space-y-1 max-h-32 overflow-auto scrollbar-thin">
-                  {aiSuggestions.map((suggestion, idx) => (
-                    <button
-                      key={idx}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        e.preventDefault();
-                        handleApplyAISuggestion(suggestion);
-                      }}
-                      onMouseDown={(e) => e.stopPropagation()}
-                      className="w-full flex items-start gap-2 p-2 rounded-md bg-muted/50 hover:bg-muted transition-colors text-left"
-                    >
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-sm font-medium truncate">
-                            {suggestion.code}
-                          </span>
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-accent/20 text-accent">
-                            {Math.round(suggestion.confidence * 100)}%
-                          </span>
-                        </div>
-                        <p className="text-xs text-muted-foreground truncate">
-                          {suggestion.reason}
-                        </p>
-                        {suggestion.existingMatch && (
-                          <p className="text-xs text-amber-500 flex items-center gap-1 mt-0.5">
-                            <AlertTriangle className="h-3 w-3" />
-                            Similar: "{suggestion.existingMatch}"
+                    {aiSuggestions.map((suggestion, idx) => (
+                      <button
+                        key={idx}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          e.preventDefault();
+                          handleApplyAISuggestion(suggestion);
+                        }}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        className="w-full flex items-start gap-2 p-2 rounded-md bg-muted/50 hover:bg-muted transition-colors text-left"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-sm font-medium truncate">
+                              {suggestion.code}
+                            </span>
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-accent/20 text-accent">
+                              {Math.round(suggestion.confidence * 100)}%
+                            </span>
+                          </div>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {suggestion.reason}
                           </p>
-                        )}
-                      </div>
-                      <Plus className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                    </button>
-                  ))}
-                </div>
-              )}
+                          {suggestion.existingMatch && (
+                            <p className="text-xs text-amber-500 flex items-center gap-1 mt-0.5">
+                              <AlertTriangle className="h-3 w-3" />
+                              Similar: "{suggestion.existingMatch}"
+                            </p>
+                          )}
+                        </div>
+                        <Plus className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
@@ -578,7 +577,7 @@ export function DocumentViewer() {
                     // Count excerpts in current document
                     const excerptsInDoc =
                       activeDocument?.excerpts?.filter(
-                        (e) => e.codeId === code.id
+                        (e) => e.codeId === code.id,
                       ).length || 0;
 
                     return (
@@ -590,11 +589,11 @@ export function DocumentViewer() {
                           selectedCodes.includes(code.id)
                             ? "ring-2 ring-accent ring-offset-1"
                             : excerptsInDoc > 0
-                            ? "opacity-90 hover:opacity-100"
-                            : "opacity-70 hover:opacity-100",
+                              ? "opacity-90 hover:opacity-100"
+                              : "opacity-70 hover:opacity-100",
                           code.level === "main" && "code-chip-main",
                           code.level === "child" && "code-chip-child",
-                          code.level === "subchild" && "code-chip-subchild"
+                          code.level === "subchild" && "code-chip-subchild",
                         )}
                       >
                         {selectedCodes.includes(code.id) && (

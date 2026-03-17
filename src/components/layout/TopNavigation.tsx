@@ -16,7 +16,9 @@ import {
   Copy,
   Sparkles,
   Settings,
+  Clock,
 } from "lucide-react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { WorkspaceSettings } from "@/components/views/WorkspaceSettings";
 import {
@@ -157,7 +159,7 @@ export function TopNavigation() {
                     onClick={() => handleStudySwitch(study.id)}
                     className={cn(
                       "flex items-center gap-2",
-                      study.id === activeStudyId && "bg-accent"
+                      study.id === activeStudyId && "bg-accent",
                     )}
                   >
                     <div
@@ -266,9 +268,10 @@ export function TopNavigation() {
         </Button>
 
         {/* Workspace Settings - Hidden when configured via URL */}
-        {activeStudy && !new URLSearchParams(window.location.search).has('participantId') && (
-          <WorkspaceSettings />
-        )}
+        {activeStudy &&
+          !new URLSearchParams(window.location.search).has("participantId") && (
+            <WorkspaceSettings />
+          )}
 
         {/* Workspace Info & Collaborators */}
         {currentCollaborator && (
@@ -317,7 +320,7 @@ export function TopNavigation() {
                 <DropdownMenuItem
                   onClick={() => {
                     navigator.clipboard.writeText(
-                      getActiveWorkspace()?.code || ""
+                      getActiveWorkspace()?.code || "",
                     );
                     toast({ title: "Workspace code copied!" });
                   }}

@@ -81,7 +81,7 @@ interface QDAState {
       | "themes"
       | "excerpts"
       | "memos"
-    >
+    >,
   ) => void;
   updateStudy: (
     id: string,
@@ -95,7 +95,7 @@ interface QDAState {
         | "tags"
         | "color"
       >
-    >
+    >,
   ) => void;
   deleteStudy: (id: string) => void;
   setActiveStudy: (id: string | null) => void;
@@ -104,7 +104,7 @@ interface QDAState {
 
   // Document actions
   addDocument: (
-    doc: Omit<QDADocument, "id" | "uploadedAt" | "excerpts">
+    doc: Omit<QDADocument, "id" | "uploadedAt" | "excerpts">,
   ) => QDADocument;
   removeDocument: (id: string) => void;
   setActiveDocument: (id: string | null) => void;
@@ -121,7 +121,7 @@ interface QDAState {
   addExcerpt: (
     selection: TextSelection,
     codeIds: string[],
-    memo?: string
+    memo?: string,
   ) => CodeExcerpt;
   updateExcerpt: (id: string, updates: Partial<CodeExcerpt>) => void;
   removeExcerpt: (id: string) => void;
@@ -137,14 +137,14 @@ interface QDAState {
   moveCodeBetweenThemes: (
     codeId: string,
     fromThemeId: string,
-    toThemeId: string
+    toThemeId: string,
   ) => void;
 
   // Memo actions
   addMemo: (
     content: string,
     targetType: Memo["targetType"],
-    targetId: string
+    targetId: string,
   ) => Memo;
   updateMemo: (id: string, content: string) => void;
   deleteMemo: (id: string) => void;
@@ -163,8 +163,16 @@ interface QDAState {
   exportCSV: () => string;
 
   // Analytics actions
-  logAction: (action: AnalyticsAction, details?: AnalyticsLog['details']) => void;
-  updateWorkspaceResearchSettings: (updates: Pick<Workspace, 'researchMode' | 'aiEnabled' | 'participantId'>) => void;
+  logAction: (
+    action: AnalyticsAction,
+    details?: AnalyticsLog["details"],
+  ) => void;
+  updateWorkspaceResearchSettings: (
+    updates: Pick<
+      Workspace,
+      "researchMode" | "aiEnabled" | "participantId" | "timerMinutes"
+    >,
+  ) => void;
   getResearchMetrics: () => ResearchMetrics | null;
   exportResearchData: () => string;
   clearAnalyticsLogs: () => void;
@@ -227,7 +235,7 @@ const syncActiveStudy = (state: QDAState) => {
 const getWorkspaceStudies = (state: QDAState) => {
   if (!state.activeWorkspaceId) return [];
   const workspace = state.workspaces.find(
-    (w) => w.id === state.activeWorkspaceId
+    (w) => w.id === state.activeWorkspaceId,
   );
   if (!workspace) return [];
   return state.studies.filter((s) => workspace.studyIds.includes(s.id));
@@ -238,7 +246,7 @@ const updateActiveStudyData = (
   state: QDAState,
   updates: Partial<
     Pick<Study, "documents" | "codes" | "themes" | "excerpts" | "memos">
-  >
+  >,
 ) => {
   if (!state.activeStudyId) return state;
 
@@ -250,7 +258,7 @@ const updateActiveStudyData = (
           updatedAt: new Date(),
           lastAccessedAt: new Date(),
         }
-      : study
+      : study,
   );
 
   return {
@@ -323,7 +331,7 @@ export const useQDAStore = create<QDAState>()(
 
       joinWorkspace: (code, collaboratorName) => {
         const workspace = get().workspaces.find(
-          (w) => w.code === code.toUpperCase()
+          (w) => w.code === code.toUpperCase(),
         );
         if (!workspace) return null;
 
@@ -345,7 +353,7 @@ export const useQDAStore = create<QDAState>()(
           workspaces: state.workspaces.map((w) =>
             w.id === workspace.id
               ? { ...w, collaborators: [...w.collaborators, collaborator] }
-              : w
+              : w,
           ),
           activeWorkspaceId: workspace.id,
           currentCollaborator: collaborator,
@@ -355,17 +363,28 @@ export const useQDAStore = create<QDAState>()(
       },
 
       setActiveWorkspace: (id) => {
-        set({ activeWorkspaceId: id });
         if (id) {
-          // Sync studies for this workspace
           const state = get();
+          const workspace = state.workspaces.find((w) => w.id === id);
+          
+          // Restore the collaborator (use the creator or first collaborator)
+          const collaborator = workspace?.collaborators.find(
+            (c) => c.id === workspace.createdBy
+          ) || workspace?.collaborators[0] || null;
+
+          set({ 
+            activeWorkspaceId: id,
+            currentCollaborator: collaborator,
+          });
+
+          // Sync studies for this workspace
           const filteredStudies = getWorkspaceStudies({
             ...state,
             activeWorkspaceId: id,
           });
           // Clear active study if it doesn't belong to this workspace
           const activeStudyInWorkspace = filteredStudies.find(
-            (s) => s.id === state.activeStudyId
+            (s) => s.id === state.activeStudyId,
           );
           if (!activeStudyInWorkspace) {
             set({
@@ -373,6 +392,13 @@ export const useQDAStore = create<QDAState>()(
               ...syncActiveStudy({ ...state, activeStudyId: null }),
             });
           }
+        } else {
+          set({
+            activeWorkspaceId: null,
+            currentCollaborator: null,
+            activeStudyId: null,
+            ...syncActiveStudy({ ...get(), activeStudyId: null }),
+          });
         }
       },
 
@@ -394,15 +420,15 @@ export const useQDAStore = create<QDAState>()(
         // Remove all studies that aren't associated with any workspace
         set((state) => {
           const allWorkspaceStudyIds = new Set(
-            state.workspaces.flatMap((w) => w.studyIds)
+            state.workspaces.flatMap((w) => w.studyIds),
           );
           const filteredStudies = state.studies.filter((s) =>
-            allWorkspaceStudyIds.has(s.id)
+            allWorkspaceStudyIds.has(s.id),
           );
           return {
             studies: filteredStudies,
             activeStudyId: filteredStudies.find(
-              (s) => s.id === state.activeStudyId
+              (s) => s.id === state.activeStudyId,
             )
               ? state.activeStudyId
               : null,
@@ -437,7 +463,7 @@ export const useQDAStore = create<QDAState>()(
             ? state.workspaces.map((w) =>
                 w.id === state.activeWorkspaceId
                   ? { ...w, studyIds: [...w.studyIds, newStudy.id] }
-                  : w
+                  : w,
               )
             : state.workspaces;
 
@@ -457,7 +483,7 @@ export const useQDAStore = create<QDAState>()(
       updateStudy: (id, updates) => {
         set((state) => ({
           studies: state.studies.map((s) =>
-            s.id === id ? { ...s, ...updates, updatedAt: new Date() } : s
+            s.id === id ? { ...s, ...updates, updatedAt: new Date() } : s,
           ),
         }));
       },
@@ -483,7 +509,7 @@ export const useQDAStore = create<QDAState>()(
         set((state) => {
           // Update last accessed time
           const updatedStudies = state.studies.map((s) =>
-            s.id === id ? { ...s, lastAccessedAt: new Date() } : s
+            s.id === id ? { ...s, lastAccessedAt: new Date() } : s,
           );
           return {
             studies: updatedStudies,
@@ -553,10 +579,10 @@ export const useQDAStore = create<QDAState>()(
           });
         });
         const mostUsedCodeId = Array.from(codeFrequency.entries()).sort(
-          (a, b) => b[1] - a[1]
+          (a, b) => b[1] - a[1],
         )[0]?.[0];
         const mostUsedCode = study.codes.find(
-          (c) => c.id === mostUsedCodeId
+          (c) => c.id === mostUsedCodeId,
         )?.name;
 
         return {
@@ -586,7 +612,7 @@ export const useQDAStore = create<QDAState>()(
         set((state) =>
           updateActiveStudyData(state, {
             documents: [...state.documents, newDoc],
-          })
+          }),
         );
         return newDoc;
       },
@@ -597,7 +623,7 @@ export const useQDAStore = create<QDAState>()(
           updateActiveStudyData(state, {
             documents: state.documents.filter((d) => d.id !== id),
             excerpts: state.excerpts.filter((e) => e.documentId !== id),
-          })
+          }),
         );
         set((state) => ({
           activeDocumentId:
@@ -605,7 +631,9 @@ export const useQDAStore = create<QDAState>()(
         }));
       },
 
-      setActiveDocument: (id) => set({ activeDocumentId: id }),
+      setActiveDocument: (id) => {
+        set({ activeDocumentId: id });
+      },
 
       // Code actions
       addCode: (name, parentId, level = "main") => {
@@ -625,7 +653,7 @@ export const useQDAStore = create<QDAState>()(
         set((state) =>
           updateActiveStudyData(state, {
             codes: [...state.codes, newCode],
-          })
+          }),
         );
         return newCode;
       },
@@ -635,9 +663,9 @@ export const useQDAStore = create<QDAState>()(
         set((state) =>
           updateActiveStudyData(state, {
             codes: state.codes.map((c) =>
-              c.id === id ? { ...c, ...updates } : c
+              c.id === id ? { ...c, ...updates } : c,
             ),
-          })
+          }),
         );
       },
 
@@ -651,7 +679,7 @@ export const useQDAStore = create<QDAState>()(
           set((state) =>
             updateActiveStudyData(state, {
               codes: state.codes.filter(
-                (c) => c.id !== id && c.parentId !== id
+                (c) => c.id !== id && c.parentId !== id,
               ),
               excerpts: state.excerpts.map((e) => ({
                 ...e,
@@ -661,7 +689,7 @@ export const useQDAStore = create<QDAState>()(
                 ...t,
                 codeIds: t.codeIds.filter((cid) => cid !== id),
               })),
-            })
+            }),
           );
         }
       },
@@ -677,7 +705,7 @@ export const useQDAStore = create<QDAState>()(
         set((state) =>
           updateActiveStudyData(state, {
             codes: [...state.codes, lastDeleted],
-          })
+          }),
         );
         return lastDeleted;
       },
@@ -706,7 +734,7 @@ export const useQDAStore = create<QDAState>()(
           ...new Set([...target.excerptIds, ...source.excerptIds]),
         ];
         const relevantExcerpts = updatedExcerpts.filter((e) =>
-          mergedExcerptIds.includes(e.id)
+          mergedExcerptIds.includes(e.id),
         );
         const uniqueDocIds = new Set(relevantExcerpts.map((e) => e.documentId));
 
@@ -721,11 +749,11 @@ export const useQDAStore = create<QDAState>()(
                       frequency: mergedExcerptIds.length,
                       documentCount: uniqueDocIds.size,
                     }
-                  : c
+                  : c,
               )
               .filter((c) => c.id !== sourceId),
             excerpts: updatedExcerpts,
-          })
+          }),
         );
       },
 
@@ -735,7 +763,7 @@ export const useQDAStore = create<QDAState>()(
         set((state) =>
           updateActiveStudyData(state, {
             codes: state.codes.map((c) => (c.id === id ? { ...c, name } : c)),
-          })
+          }),
         );
       },
 
@@ -762,7 +790,7 @@ export const useQDAStore = create<QDAState>()(
               const docIds = new Set(
                 [...state.excerpts, newExcerpt]
                   .filter((e) => newExcerptIds.includes(e.id))
-                  .map((e) => e.documentId)
+                  .map((e) => e.documentId),
               );
               return {
                 ...code,
@@ -781,7 +809,7 @@ export const useQDAStore = create<QDAState>()(
         });
 
         // Log the action
-        get().logAction('excerpt_created', {
+        get().logAction("excerpt_created", {
           documentId: selection.documentId,
           excerptId: newExcerpt.id,
           excerptText: selection.text.substring(0, 100), // First 100 chars
@@ -790,9 +818,9 @@ export const useQDAStore = create<QDAState>()(
         });
 
         // Log each code application
-        codeIds.forEach(codeId => {
-          const code = get().codes.find(c => c.id === codeId);
-          get().logAction('code_applied', {
+        codeIds.forEach((codeId) => {
+          const code = get().codes.find((c) => c.id === codeId);
+          get().logAction("code_applied", {
             excerptId: newExcerpt.id,
             codeId,
             codeName: code?.name,
@@ -808,9 +836,9 @@ export const useQDAStore = create<QDAState>()(
         set((state) =>
           updateActiveStudyData(state, {
             excerpts: state.excerpts.map((e) =>
-              e.id === id ? { ...e, ...updates } : e
+              e.id === id ? { ...e, ...updates } : e,
             ),
-          })
+          }),
         );
       },
 
@@ -825,12 +853,12 @@ export const useQDAStore = create<QDAState>()(
             codes: state.codes.map((code) => {
               if (excerpt.codeIds.includes(code.id)) {
                 const newExcerptIds = code.excerptIds.filter(
-                  (eid) => eid !== id
+                  (eid) => eid !== id,
                 );
                 const docIds = new Set(
                   state.excerpts
                     .filter((e) => newExcerptIds.includes(e.id))
-                    .map((e) => e.documentId)
+                    .map((e) => e.documentId),
                 );
                 return {
                   ...code,
@@ -841,7 +869,7 @@ export const useQDAStore = create<QDAState>()(
               }
               return code;
             }),
-          })
+          }),
         );
       },
 
@@ -852,7 +880,7 @@ export const useQDAStore = create<QDAState>()(
           if (!excerpt || excerpt.codeIds.includes(codeId)) return state;
 
           const updatedExcerpts = state.excerpts.map((e) =>
-            e.id === excerptId ? { ...e, codeIds: [...e.codeIds, codeId] } : e
+            e.id === excerptId ? { ...e, codeIds: [...e.codeIds, codeId] } : e,
           );
 
           const updatedCodes = state.codes.map((code) => {
@@ -861,7 +889,7 @@ export const useQDAStore = create<QDAState>()(
               const docIds = new Set(
                 updatedExcerpts
                   .filter((e) => newExcerptIds.includes(e.id))
-                  .map((e) => e.documentId)
+                  .map((e) => e.documentId),
               );
               return {
                 ...code,
@@ -886,18 +914,18 @@ export const useQDAStore = create<QDAState>()(
           const updatedExcerpts = state.excerpts.map((e) =>
             e.id === excerptId
               ? { ...e, codeIds: e.codeIds.filter((id) => id !== codeId) }
-              : e
+              : e,
           );
 
           const updatedCodes = state.codes.map((code) => {
             if (code.id === codeId) {
               const newExcerptIds = code.excerptIds.filter(
-                (eid) => eid !== excerptId
+                (eid) => eid !== excerptId,
               );
               const docIds = new Set(
                 updatedExcerpts
                   .filter((e) => newExcerptIds.includes(e.id))
-                  .map((e) => e.documentId)
+                  .map((e) => e.documentId),
               );
               return {
                 ...code,
@@ -931,7 +959,7 @@ export const useQDAStore = create<QDAState>()(
         set((state) =>
           updateActiveStudyData(state, {
             themes: [...state.themes, newTheme],
-          })
+          }),
         );
         return newTheme;
       },
@@ -941,9 +969,9 @@ export const useQDAStore = create<QDAState>()(
         set((state) =>
           updateActiveStudyData(state, {
             themes: state.themes.map((t) =>
-              t.id === id ? { ...t, ...updates } : t
+              t.id === id ? { ...t, ...updates } : t,
             ),
-          })
+          }),
         );
       },
 
@@ -952,9 +980,9 @@ export const useQDAStore = create<QDAState>()(
         set((state) =>
           updateActiveStudyData(state, {
             themes: state.themes.filter(
-              (t) => t.id !== id && t.parentId !== id
+              (t) => t.id !== id && t.parentId !== id,
             ),
-          })
+          }),
         );
       },
 
@@ -965,9 +993,9 @@ export const useQDAStore = create<QDAState>()(
             themes: state.themes.map((t) =>
               t.id === themeId && !t.codeIds.includes(codeId)
                 ? { ...t, codeIds: [...t.codeIds, codeId] }
-                : t
+                : t,
             ),
-          })
+          }),
         );
       },
 
@@ -978,9 +1006,9 @@ export const useQDAStore = create<QDAState>()(
             themes: state.themes.map((t) =>
               t.id === themeId
                 ? { ...t, codeIds: t.codeIds.filter((id) => id !== codeId) }
-                : t
+                : t,
             ),
-          })
+          }),
         );
       },
 
@@ -1000,7 +1028,7 @@ export const useQDAStore = create<QDAState>()(
               }
               return t;
             }),
-          })
+          }),
         );
       },
 
@@ -1018,7 +1046,7 @@ export const useQDAStore = create<QDAState>()(
         set((state) =>
           updateActiveStudyData(state, {
             memos: [...state.memos, newMemo],
-          })
+          }),
         );
         return newMemo;
       },
@@ -1028,9 +1056,9 @@ export const useQDAStore = create<QDAState>()(
         set((state) =>
           updateActiveStudyData(state, {
             memos: state.memos.map((m) =>
-              m.id === id ? { ...m, content, updatedAt: new Date() } : m
+              m.id === id ? { ...m, content, updatedAt: new Date() } : m,
             ),
-          })
+          }),
         );
       },
 
@@ -1039,7 +1067,7 @@ export const useQDAStore = create<QDAState>()(
         set((state) =>
           updateActiveStudyData(state, {
             memos: state.memos.filter((m) => m.id !== id),
-          })
+          }),
         );
       },
 
@@ -1080,21 +1108,195 @@ export const useQDAStore = create<QDAState>()(
             selectedThemeId: null,
           });
         } catch (error) {
-          console.error("Failed to import project:", error);
+          // Import failed silently
         }
       },
 
       exportCSV: () => {
         const state = get();
-        const lines = ["Code,Frequency,Document Count,Level,Parent"];
+        const workspace = state.getActiveWorkspace();
+        const activeStudy = state.studies.find(
+          (s) => s.id === state.activeStudyId,
+        );
+
+        // Enhanced CSV export for qualitative analysis quality assessment
+        const header = [
+          "ParticipantID",
+          "AIEnabled",
+          "TotalCodes",
+          "CodesWithDescriptions",
+          "CodePrecisionRate(%)",
+          "TotalThemes",
+          "AvgCodesPerTheme",
+          "TotalExcerpts",
+          "AvgExcerptLength",
+          "MultiCodedExcerpts",
+          "CoverageRate(%)",
+          "MemosWritten",
+          "MainCodes",
+          "ChildCodes",
+          "SubchildCodes",
+          "AIAcceptanceRate(%)",
+          "SessionDuration(min)",
+          "Timestamp",
+        ];
+
+        // Calculate quality-focused metrics
+        const totalCodes = state.codes.length;
+        const totalExcerpts = state.excerpts.length;
+        const totalThemes = state.themes.length;
+        const mainCodes = state.codes.filter((c) => c.level === "main").length;
+        const childCodes = state.codes.filter(
+          (c) => c.level === "child",
+        ).length;
+        const subchildCodes = state.codes.filter(
+          (c) => c.level === "subchild",
+        ).length;
+        const codesWithDesc = state.codes.filter(
+          (c) => c.description && c.description.length > 0,
+        ).length;
+        
+        // Code precision rate (percentage of codes with descriptions)
+        const codePrecisionRate = totalCodes > 0 
+          ? ((codesWithDesc / totalCodes) * 100).toFixed(1) 
+          : "0";
+        
+        // Average codes per theme
+        const avgCodesPerTheme = totalThemes > 0
+          ? (state.themes.reduce((sum, t) => sum + t.codeIds.length, 0) / totalThemes).toFixed(1)
+          : "0";
+        
+        const avgExcerptLength =
+          totalExcerpts > 0
+            ? (state.excerpts.reduce((sum, e) => sum + e.text.length, 0) / totalExcerpts).toFixed(0)
+            : "0";
+        const multiCodedExcerpts = state.excerpts.filter(
+          (e) => e.codeIds.length > 1,
+        ).length;
+        
+        // Coverage rate: percentage of document text that has been coded
+        const totalDocChars = state.documents.reduce((sum, d) => sum + d.content.length, 0);
+        const codedChars = state.excerpts.reduce((sum, e) => sum + e.text.length, 0);
+        const coverageRate = totalDocChars > 0
+          ? ((codedChars / totalDocChars) * 100).toFixed(1)
+          : "0";
+        
+        const memosWritten = state.memos.length;
+
+        // Session duration (optional - for background tracking only)
+        const sessionDuration = state.sessionStartTime
+          ? (new Date().getTime() -
+              new Date(state.sessionStartTime).getTime()) /
+            60000
+          : 0;
+
+        // AI metrics
+        const aiLogs = state.analyticsLogs.filter((log) =>
+          log.action.includes("ai_suggestion"),
+        );
+        const aiAccepted = aiLogs.filter(
+          (log) => log.action === "ai_suggestion_accepted",
+        ).length;
+        const aiRequested = aiLogs.length;
+        const aiAcceptanceRate =
+          aiRequested > 0 ? ((aiAccepted / aiRequested) * 100).toFixed(1) : "0";
+
+        const summaryLine = [
+          workspace?.participantId || "unknown",
+          workspace?.aiEnabled ? "Yes" : "No",
+          totalCodes,
+          codesWithDesc,
+          codePrecisionRate,
+          totalThemes,
+          avgCodesPerTheme,
+          totalExcerpts,
+          avgExcerptLength,
+          multiCodedExcerpts,
+          coverageRate,
+          memosWritten,
+          mainCodes,
+          childCodes,
+          subchildCodes,
+          aiAcceptanceRate,
+          sessionDuration.toFixed(1),
+          new Date().toISOString(),
+        ];
+
+        const lines = [
+          header.join(","),
+          summaryLine.join(","),
+          "",
+          "=== DETAILED CODE LIST ===",
+          "Code,Frequency,DocumentCount,Level,Parent,HasDescription",
+        ];
+
         state.codes.forEach((code) => {
           const parent = code.parentId
             ? state.codes.find((c) => c.id === code.parentId)?.name || ""
             : "";
+          const hasDesc =
+            code.description && code.description.length > 0 ? "Yes" : "No";
           lines.push(
-            `"${code.name}",${code.frequency},${code.documentCount},${code.level},"${parent}"`
+            `"${code.name}",${code.frequency},${code.documentCount},${code.level},"${parent}",${hasDesc}`,
           );
         });
+
+        // Add themes section with their codes
+        if (state.themes.length > 0) {
+          lines.push(
+            "",
+            "=== THEMES WITH CODES ===",
+            "ThemeName,ThemeDescription,CodesInTheme,CodeCount,HasMemo",
+          );
+
+          state.themes.forEach((theme) => {
+            const themeCodes = theme.codeIds
+              .map((codeId) => state.codes.find((c) => c.id === codeId)?.name)
+              .filter(Boolean)
+              .join("; ");
+
+            const themeDesc = (theme.description || "")
+              .replace(/"/g, '""')
+              .replace(/\n/g, " ");
+            const hasMemo = theme.memo && theme.memo.length > 0 ? "Yes" : "No";
+
+            lines.push(
+              `"${theme.name}","${themeDesc}","${themeCodes}",${theme.codeIds.length},"${hasMemo}"`,
+            );
+          });
+        }
+
+        // Add excerpts section
+        lines.push(
+          "",
+          "=== CODED EXCERPTS ===",
+          "ExcerptText,CodesApplied,ExcerptLength,DocumentName,HasMemo",
+        );
+
+        state.excerpts.forEach((excerpt) => {
+          const codeNames = excerpt.codeIds
+            .map((codeId) => state.codes.find((c) => c.id === codeId)?.name)
+            .filter(Boolean)
+            .join("; ");
+
+          const document = state.documents.find(
+            (d) => d.id === excerpt.documentId,
+          );
+          const documentName = document?.title || "Unknown";
+
+          // Clean excerpt text for CSV (remove quotes, newlines)
+          const cleanText = excerpt.text
+            .replace(/"/g, '""')
+            .replace(/\n/g, " ");
+
+          const hasMemo =
+            excerpt.memo && excerpt.memo.length > 0 ? "Yes" : "No";
+
+          lines.push(
+            `"${cleanText}","${codeNames}",${excerpt.text.length},"${documentName}",${hasMemo}`,
+          );
+        });
+
         return lines.join("\n");
       },
 
@@ -1102,7 +1304,7 @@ export const useQDAStore = create<QDAState>()(
       getCodesByDocument: (documentId) => {
         const state = get();
         const docExcerpts = state.excerpts.filter(
-          (e) => e.documentId === documentId
+          (e) => e.documentId === documentId,
         );
         const codeIds = new Set(docExcerpts.flatMap((e) => e.codeIds));
         return state.codes.filter((c) => codeIds.has(c.id));
@@ -1131,22 +1333,24 @@ export const useQDAStore = create<QDAState>()(
       checkDuplicateCodeName: (name, excludeId) => {
         return get().codes.some(
           (c) =>
-            c.name.toLowerCase() === name.toLowerCase() && c.id !== excludeId
+            c.name.toLowerCase() === name.toLowerCase() && c.id !== excludeId,
         );
       },
 
       // Analytics actions
       logAction: (action, details = {}) => {
         const state = get();
-        const workspace = state.workspaces.find(w => w.id === state.activeWorkspaceId);
-        
+        const workspace = state.workspaces.find(
+          (w) => w.id === state.activeWorkspaceId,
+        );
+
         // Only log if workspace is in research mode
         if (!workspace?.researchMode) return;
 
         const log: AnalyticsLog = {
           id: uuidv4(),
           timestamp: new Date(),
-          workspaceId: state.activeWorkspaceId || '',
+          workspaceId: state.activeWorkspaceId || "",
           participantId: workspace.participantId,
           action,
           details: {
@@ -1160,33 +1364,41 @@ export const useQDAStore = create<QDAState>()(
 
       updateWorkspaceResearchSettings: (updates) => {
         const state = get();
-        const updatedWorkspaces = state.workspaces.map(w =>
-          w.id === state.activeWorkspaceId
-            ? { ...w, ...updates }
-            : w
+        const updatedWorkspaces = state.workspaces.map((w) =>
+          w.id === state.activeWorkspaceId ? { ...w, ...updates } : w,
         );
         set({ workspaces: updatedWorkspaces });
       },
 
       getResearchMetrics: () => {
         const state = get();
-        const workspace = state.workspaces.find(w => w.id === state.activeWorkspaceId);
-        
+        const workspace = state.workspaces.find(
+          (w) => w.id === state.activeWorkspaceId,
+        );
+
         if (!workspace?.researchMode || !workspace.participantId) return null;
 
         try {
           const logs = state.analyticsLogs.filter(
-            log => log.workspaceId === state.activeWorkspaceId
+            (log) => log.workspaceId === state.activeWorkspaceId,
           );
 
-          const excerptCreated = logs.filter(l => l.action === 'excerpt_created');
-          const aiRequested = logs.filter(l => l.action === 'ai_suggestion_requested');
-          const aiAccepted = logs.filter(l => l.action === 'ai_suggestion_accepted');
-          const aiRejected = logs.filter(l => l.action === 'ai_suggestion_rejected');
-          
-          const sessionStart = logs.find(l => l.action === 'session_started');
-          const sessionEnd = logs.find(l => l.action === 'session_ended');
-          
+          const excerptCreated = logs.filter(
+            (l) => l.action === "excerpt_created",
+          );
+          const aiRequested = logs.filter(
+            (l) => l.action === "ai_suggestion_requested",
+          );
+          const aiAccepted = logs.filter(
+            (l) => l.action === "ai_suggestion_accepted",
+          );
+          const aiRejected = logs.filter(
+            (l) => l.action === "ai_suggestion_rejected",
+          );
+
+          const sessionStart = logs.find((l) => l.action === "session_started");
+          const sessionEnd = logs.find((l) => l.action === "session_ended");
+
           // Handle dates that might be strings from localStorage - be very defensive
           let startTime = new Date();
           if (sessionStart?.timestamp) {
@@ -1194,12 +1406,12 @@ export const useQDAStore = create<QDAState>()(
           } else if (state.sessionStartTime) {
             startTime = new Date(state.sessionStartTime);
           }
-          
+
           let endTime = null;
           if (sessionEnd?.timestamp) {
             endTime = new Date(sessionEnd.timestamp);
           }
-          
+
           // Validate dates
           if (isNaN(startTime.getTime())) {
             startTime = new Date();
@@ -1207,15 +1419,18 @@ export const useQDAStore = create<QDAState>()(
           if (endTime && isNaN(endTime.getTime())) {
             endTime = null;
           }
-          
-          const totalTime = endTime 
+
+          const totalTime = endTime
             ? endTime.getTime() - startTime.getTime()
             : Date.now() - startTime.getTime();
 
-          const uniqueCodes = new Set(state.codes.map(c => c.id)).size;
+          const uniqueCodes = new Set(state.codes.map((c) => c.id)).size;
           const totalExcerpts = state.excerpts.length;
           const totalCodes = state.codes.length;
-          const totalTextCoded = state.excerpts.reduce((sum, e) => sum + (e.text?.length || 0), 0);
+          const totalTextCoded = state.excerpts.reduce(
+            (sum, e) => sum + (e.text?.length || 0),
+            0,
+          );
 
           const metrics: ResearchMetrics = {
             participantId: workspace.participantId,
@@ -1223,25 +1438,29 @@ export const useQDAStore = create<QDAState>()(
             startTime,
             endTime,
             totalExcerpts,
-          totalCodes,
-          uniqueCodes,
-          averageCodesPerExcerpt: totalExcerpts > 0 ? totalCodes / totalExcerpts : 0,
-          codingSpeed: totalTime > 0 ? (totalExcerpts / (totalTime / 3600000)) : 0, // per hour
-          aiSuggestionsRequested: aiRequested.length,
-          aiSuggestionsAccepted: aiAccepted.length,
-          aiSuggestionsRejected: aiRejected.length,
-          aiAcceptanceRate: aiRequested.length > 0 
-            ? aiAccepted.length / aiRequested.length
-            : 0,
-          totalActiveTime: totalTime,
-          averageTimePerExcerpt: totalExcerpts > 0 ? totalTime / totalExcerpts : 0,
-          documentsProcessed: new Set(state.excerpts.map(e => e.documentId)).size,
-          totalTextCoded,
-        };
+            totalCodes,
+            uniqueCodes,
+            averageCodesPerExcerpt:
+              totalExcerpts > 0 ? totalCodes / totalExcerpts : 0,
+            codingSpeed:
+              totalTime > 0 ? totalExcerpts / (totalTime / 3600000) : 0, // per hour
+            aiSuggestionsRequested: aiRequested.length,
+            aiSuggestionsAccepted: aiAccepted.length,
+            aiSuggestionsRejected: aiRejected.length,
+            aiAcceptanceRate:
+              aiRequested.length > 0
+                ? aiAccepted.length / aiRequested.length
+                : 0,
+            totalActiveTime: totalTime,
+            averageTimePerExcerpt:
+              totalExcerpts > 0 ? totalTime / totalExcerpts : 0,
+            documentsProcessed: new Set(state.excerpts.map((e) => e.documentId))
+              .size,
+            totalTextCoded,
+          };
 
-        return metrics;
+          return metrics;
         } catch (error) {
-          console.error('Error calculating research metrics:', error);
           return null;
         }
       },
@@ -1249,53 +1468,75 @@ export const useQDAStore = create<QDAState>()(
       exportResearchData: () => {
         const state = get();
         const metrics = get().getResearchMetrics();
-        const workspace = state.workspaces.find(w => w.id === state.activeWorkspaceId);
+        const workspace = state.workspaces.find(
+          (w) => w.id === state.activeWorkspaceId,
+        );
 
         const csvLines = [
           // Header
-          'Timestamp,Participant ID,Action,Document ID,Excerpt ID,Code ID,Code Name,AI Suggestion,AI Accepted,Duration,Excerpt Length',
+          "Timestamp,Participant ID,Action,Document ID,Excerpt ID,Code ID,Code Name,AI Suggestion,AI Accepted,Duration,Excerpt Length",
         ];
 
         // Add each log entry
         state.analyticsLogs
-          .filter(log => log.workspaceId === state.activeWorkspaceId)
-          .forEach(log => {
+          .filter((log) => log.workspaceId === state.activeWorkspaceId)
+          .forEach((log) => {
             const row = [
               new Date(log.timestamp).toISOString(),
-              log.participantId || '',
+              log.participantId || "",
               log.action,
-              log.details.documentId || '',
-              log.details.excerptId || '',
-              log.details.codeId || '',
-              log.details.codeName || '',
-              log.details.aiSuggestion || '',
-              log.details.suggestionAccepted !== undefined ? log.details.suggestionAccepted : '',
-              log.details.duration || '',
-              log.details.excerptLength || '',
+              log.details.documentId || "",
+              log.details.excerptId || "",
+              log.details.codeId || "",
+              log.details.codeName || "",
+              log.details.aiSuggestion || "",
+              log.details.suggestionAccepted !== undefined
+                ? log.details.suggestionAccepted
+                : "",
+              log.details.duration || "",
+              log.details.excerptLength || "",
             ];
-            csvLines.push(row.map(v => `"${v}"`).join(','));
+            csvLines.push(row.map((v) => `"${v}"`).join(","));
           });
 
         // Add summary metrics
         if (metrics) {
-          csvLines.push('');
-          csvLines.push('SUMMARY METRICS');
+          csvLines.push("");
+          csvLines.push("SUMMARY METRICS");
           csvLines.push(`Participant ID,"${metrics.participantId}"`);
           csvLines.push(`Total Excerpts,${metrics.totalExcerpts}`);
           csvLines.push(`Total Codes,${metrics.totalCodes}`);
           csvLines.push(`Unique Codes,${metrics.uniqueCodes}`);
-          csvLines.push(`Coding Speed (per hour),${metrics.codingSpeed.toFixed(2)}`);
-          csvLines.push(`AI Enabled,${workspace?.aiEnabled ? 'Yes' : 'No'}`);
-          csvLines.push(`AI Suggestions Requested,${metrics.aiSuggestionsRequested}`);
-          csvLines.push(`AI Suggestions Accepted,${metrics.aiSuggestionsAccepted}`);
-          csvLines.push(`AI Acceptance Rate,${(metrics.aiAcceptanceRate * 100).toFixed(1)}%`);
-          csvLines.push(`Total Active Time (minutes),${(metrics.totalActiveTime / 60000).toFixed(2)}`);
-          csvLines.push(`Average Time Per Excerpt (seconds),${(metrics.averageTimePerExcerpt / 1000).toFixed(2)}`);
+          csvLines.push(
+            `Coding Speed (per hour),${metrics.codingSpeed.toFixed(2)}`,
+          );
+          csvLines.push(`AI Enabled,${workspace?.aiEnabled ? "Yes" : "No"}`);
+          csvLines.push(
+            `AI Suggestions Requested,${metrics.aiSuggestionsRequested}`,
+          );
+          csvLines.push(
+            `AI Suggestions Accepted,${metrics.aiSuggestionsAccepted}`,
+          );
+          csvLines.push(
+            `AI Acceptance Rate,${(metrics.aiAcceptanceRate * 100).toFixed(1)}%`,
+          );
+          csvLines.push(
+            `Total Active Time (minutes),${(
+              metrics.totalActiveTime / 60000
+            ).toFixed(2)}`,
+          );
+          csvLines.push(
+            `Average Time Per Excerpt (seconds),${(
+              metrics.averageTimePerExcerpt / 1000
+            ).toFixed(2)}`,
+          );
           csvLines.push(`Documents Processed,${metrics.documentsProcessed}`);
-          csvLines.push(`Total Text Coded (characters),${metrics.totalTextCoded}`);
+          csvLines.push(
+            `Total Text Coded (characters),${metrics.totalTextCoded}`,
+          );
         }
 
-        return csvLines.join('\n');
+        return csvLines.join("\n");
       },
 
       clearAnalyticsLogs: () => {
@@ -1304,15 +1545,17 @@ export const useQDAStore = create<QDAState>()(
 
       startSession: () => {
         const state = get();
-        const workspace = state.workspaces.find(w => w.id === state.activeWorkspaceId);
+        const workspace = state.workspaces.find(
+          (w) => w.id === state.activeWorkspaceId,
+        );
         if (workspace?.researchMode) {
           set({ sessionStartTime: new Date() });
-          get().logAction('session_started');
+          get().logAction("session_started");
         }
       },
 
       endSession: () => {
-        get().logAction('session_ended');
+        get().logAction("session_ended");
       },
     }),
     {
@@ -1326,6 +1569,6 @@ export const useQDAStore = create<QDAState>()(
         analyticsLogs: state.analyticsLogs,
         sessionStartTime: state.sessionStartTime,
       }),
-    }
-  )
+    },
+  ),
 );

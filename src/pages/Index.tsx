@@ -29,74 +29,85 @@ const Index = () => {
   } = useQDAStore();
   const { setHelpModalOpen, setKeyboardShortcutsOpen } = useHelpStore();
 
-  // Get studies for current workspace
   const workspaceStudies = getWorkspaceStudies();
-  
-  // Check if participant mode (configured via URL)
-  const isParticipantMode = new URLSearchParams(window.location.search).has('participantId');
 
-  // Clear old data for fresh participant sessions
+  const isParticipantMode = new URLSearchParams(window.location.search).has(
+    "participantId",
+  );
+
   useEffect(() => {
     checkAndClearForParticipant();
   }, []);
 
-  // Handle URL parameters for research configuration
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const participantId = urlParams.get("participantId");
     const aiEnabled = urlParams.get("aiEnabled");
 
-    // Only auto-configure if we have a workspace and URL params are present
-    if (activeWorkspaceId && (participantId || aiEnabled !== null)) {
+    if (activeWorkspaceId) {
       const workspace = getActiveWorkspace();
-      
-      // Check if already configured to avoid re-triggering
-      const alreadyConfigured = 
-        workspace?.researchMode && 
-        workspace?.participantId === participantId &&
-        (aiEnabled === null || workspace?.aiEnabled === (aiEnabled === "true"));
 
-      if (!alreadyConfigured) {
-        const settings: any = {};
-        
-        if (participantId) {
-          settings.researchMode = true;
-          settings.participantId = participantId;
+      // If NO URL parameters present, clear research mode settings
+      if (!participantId && aiEnabled === null) {
+        if (workspace?.researchMode) {
+          updateWorkspaceResearchSettings({
+            researchMode: false,
+            participantId: undefined,
+            aiEnabled: true,
+          });
         }
-        
-        if (aiEnabled !== null) {
-          settings.aiEnabled = aiEnabled === "true";
-        }
+        return;
+      }
 
-        updateWorkspaceResearchSettings(settings);
-        
-        // Start session if enabling research mode
-        if (participantId && !workspace?.researchMode) {
-          startSession();
-          // Don't show toast for participants to avoid confusion
+      // Only auto-configure if we have URL params
+      if (participantId || aiEnabled !== null) {
+        const alreadyConfigured =
+          workspace?.researchMode &&
+          workspace?.participantId === participantId &&
+          (aiEnabled === null ||
+            workspace?.aiEnabled === (aiEnabled === "true"));
+
+        if (!alreadyConfigured) {
+          const settings: any = {};
+
+          if (participantId) {
+            settings.researchMode = true;
+            settings.participantId = participantId;
+          }
+
+          if (aiEnabled !== null) {
+            settings.aiEnabled = aiEnabled === "true";
+          }
+
+          updateWorkspaceResearchSettings(settings);
+
+          if (participantId && !workspace?.researchMode) {
+            startSession();
+          }
         }
       }
     }
-  }, [activeWorkspaceId, getActiveWorkspace, updateWorkspaceResearchSettings, startSession]);
+  }, [
+    activeWorkspaceId,
+    getActiveWorkspace,
+    updateWorkspaceResearchSettings,
+    startSession,
+  ]);
 
-  // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ctrl+H: Open help
       if (e.ctrlKey && e.key === "h") {
         e.preventDefault();
         setHelpModalOpen(true);
         return;
       }
 
-      // Ctrl+K: Open keyboard shortcuts
       if (e.ctrlKey && e.key === "k") {
         e.preventDefault();
         setKeyboardShortcutsOpen(true);
         return;
       }
 
-      // Ctrl+B: Toggle right panel
       if (e.ctrlKey && e.key === "b") {
         e.preventDefault();
         setRightPanelOpen((prev) => !prev);

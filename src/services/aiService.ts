@@ -30,7 +30,7 @@ export interface AISummary {
 
 async function callOpenAI(
   messages: { role: string; content: string }[],
-  temperature = 0.7
+  temperature = 0.7,
 ): Promise<string> {
   if (!OPENAI_API_KEY) {
     throw new Error("OpenAI API key not configured");
@@ -61,13 +61,13 @@ async function callOpenAI(
 export async function suggestCodes(
   selectedText: string,
   existingCodes: string[],
-  fullDocumentContext?: string
+  fullDocumentContext?: string,
 ): Promise<AICodeSuggestion[]> {
   try {
     const contextPrompt = fullDocumentContext
       ? `\n\nFull document context for reference:\n${fullDocumentContext.substring(
           0,
-          3000
+          3000,
         )}...`
       : "";
 
@@ -111,8 +111,6 @@ Return only the JSON array, no other text.`;
     const suggestions = JSON.parse(response);
     return suggestions;
   } catch (error) {
-    console.error("Error getting AI suggestions:", error);
-    // Fallback to keyword-based suggestions
     return getKeywordBasedSuggestions(selectedText, existingCodes);
   }
 }
@@ -120,7 +118,7 @@ Return only the JSON array, no other text.`;
 // Fallback keyword-based suggestions
 function getKeywordBasedSuggestions(
   selectedText: string,
-  existingCodes: string[]
+  existingCodes: string[],
 ): AICodeSuggestion[] {
   const CODE_KEYWORDS: Record<string, string[]> = {
     "Work-Life Balance": [
@@ -186,7 +184,7 @@ function getKeywordBasedSuggestions(
       const existingMatch = existingCodes.find(
         (ec) =>
           ec.toLowerCase().includes(code.toLowerCase()) ||
-          code.toLowerCase().includes(ec.toLowerCase())
+          code.toLowerCase().includes(ec.toLowerCase()),
       );
 
       suggestions.push({
@@ -202,7 +200,7 @@ function getKeywordBasedSuggestions(
 }
 
 export async function suggestRefinements(
-  codes: { name: string; frequency: number; documentCount: number }[]
+  codes: { name: string; frequency: number; documentCount: number }[],
 ): Promise<AIRefinementSuggestion[]> {
   try {
     const prompt = `Analyze these qualitative codes and suggest refinements (merge similar codes, split broad codes, rename unclear ones, or group related codes):
@@ -211,7 +209,7 @@ Codes:
 ${codes
   .map(
     (c) =>
-      `- "${c.name}" (${c.frequency} excerpts, ${c.documentCount} documents)`
+      `- "${c.name}" (${c.frequency} excerpts, ${c.documentCount} documents)`,
   )
   .join("\n")}
 
@@ -236,18 +234,17 @@ Return only the JSON array.`;
         },
         { role: "user", content: prompt },
       ],
-      0.5
+      0.5,
     );
 
     return JSON.parse(response).slice(0, 5);
   } catch (error) {
-    console.error("Error getting refinement suggestions:", error);
     return [];
   }
 }
 
 export async function suggestThemes(
-  codes: { name: string; frequency: number }[]
+  codes: { name: string; frequency: number }[],
 ): Promise<AIThemeSuggestion[]> {
   try {
     const prompt = `Based on these qualitative codes, suggest 3-5 overarching themes that group related codes together:
@@ -276,12 +273,11 @@ Return only the JSON array.`;
         },
         { role: "user", content: prompt },
       ],
-      0.6
+      0.6,
     );
 
     return JSON.parse(response);
   } catch (error) {
-    console.error("Error getting theme suggestions:", error);
     return [];
   }
 }
@@ -290,7 +286,7 @@ export async function generateSummary(
   type: "code" | "theme",
   name: string,
   excerpts: string[],
-  documentTitles: string[]
+  documentTitles: string[],
 ): Promise<AISummary> {
   try {
     const excerptSamples = excerpts.slice(0, 5).join("\n\n");
@@ -325,7 +321,6 @@ Format as JSON:
 
     return JSON.parse(response);
   } catch (error) {
-    console.error("Error generating summary:", error);
     return {
       meaning: `"${name}" captures instances related to ${name.toLowerCase()}. Found ${
         excerpts.length

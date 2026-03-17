@@ -2,42 +2,35 @@ import type { Code, CodeExcerpt, CoOccurrence } from "@/types/qda";
 
 export function calculateCoOccurrences(
   codes: Code[],
-  excerpts: CodeExcerpt[]
+  excerpts: CodeExcerpt[],
 ): CoOccurrence[] {
   const coOccurrenceMap = new Map<string, CoOccurrence>();
 
-  // Group excerpts by document
-  const excerptsByDoc = new Map<string, CodeExcerpt[]>();
+  // For each excerpt, find pairs of codes that appear together
   excerpts.forEach((excerpt) => {
-    const docExcerpts = excerptsByDoc.get(excerpt.documentId) || [];
-    docExcerpts.push(excerpt);
-    excerptsByDoc.set(excerpt.documentId, docExcerpts);
-  });
+    // Skip excerpts with less than 2 codes
+    if (excerpt.codeIds.length < 2) return;
 
-  // For each document, find codes that appear together
-  excerptsByDoc.forEach((docExcerpts, documentId) => {
-    // Get all unique codes in this document
-    const docCodes = new Set<string>();
-    docExcerpts.forEach((e) => e.codeIds.forEach((id) => docCodes.add(id)));
-
-    // Create pairs
-    const codeArray = Array.from(docCodes);
-    for (let i = 0; i < codeArray.length; i++) {
-      for (let j = i + 1; j < codeArray.length; j++) {
-        const key = [codeArray[i], codeArray[j]].sort().join("-");
+    // Create pairs from codes in this excerpt
+    for (let i = 0; i < excerpt.codeIds.length; i++) {
+      for (let j = i + 1; j < excerpt.codeIds.length; j++) {
+        const code1 = excerpt.codeIds[i];
+        const code2 = excerpt.codeIds[j];
+        const key = [code1, code2].sort().join("-");
         const existing = coOccurrenceMap.get(key);
 
         if (existing) {
           existing.weight++;
-          if (!existing.documentIds.includes(documentId)) {
-            existing.documentIds.push(documentId);
+          // Track unique documents where this pair appears
+          if (!existing.documentIds.includes(excerpt.documentId)) {
+            existing.documentIds.push(excerpt.documentId);
           }
         } else {
           coOccurrenceMap.set(key, {
-            code1Id: codeArray[i],
-            code2Id: codeArray[j],
+            code1Id: code1,
+            code2Id: code2,
             weight: 1,
-            documentIds: [documentId],
+            documentIds: [excerpt.documentId],
           });
         }
       }
@@ -47,51 +40,19 @@ export function calculateCoOccurrences(
   return Array.from(coOccurrenceMap.values());
 }
 
-export function buildHierarchicalTree(codes: Code[]) {
-  const rootCodes = codes.filter((c) => !c.parentId);
-
-  const buildNode = (code: Code): any => {
-    const children = codes.filter((c) => c.parentId === code.id);
-    return {
-      id: code.id,
-      name: code.name,
-      frequency: code.frequency,
-      level: code.level,
-      color: code.color,
-      children: children.length > 0 ? children.map(buildNode) : undefined,
-    };
-  };
-
-  return rootCodes.map(buildNode);
-}
-
-export function getCodeStats(codes: Code[], excerpts: CodeExcerpt[]) {
-  return {
-    totalCodes: codes.length,
-    mainCodes: codes.filter((c) => c.level === "main").length,
-    childCodes: codes.filter((c) => c.level === "child").length,
-    subchildCodes: codes.filter((c) => c.level === "subchild").length,
-    totalExcerpts: excerpts.length,
-    averageFrequency:
-      codes.length > 0
-        ? codes.reduce((sum, c) => sum + c.frequency, 0) / codes.length
-        : 0,
-  };
-}
-
 export function getCodeExcerptCount(
   codeId: string,
-  excerpts: CodeExcerpt[]
+  excerpts: CodeExcerpt[],
 ): number {
   return excerpts.filter((e) => e.codeIds.includes(codeId)).length;
 }
 
 export function getCodeDocumentCount(
   codeId: string,
-  excerpts: CodeExcerpt[]
+  excerpts: CodeExcerpt[],
 ): number {
   const uniqueDocIds = new Set(
-    excerpts.filter((e) => e.codeIds.includes(codeId)).map((e) => e.documentId)
+    excerpts.filter((e) => e.codeIds.includes(codeId)).map((e) => e.documentId),
   );
   return uniqueDocIds.size;
 }

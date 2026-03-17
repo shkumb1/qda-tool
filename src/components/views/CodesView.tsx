@@ -112,7 +112,7 @@ export function CodesView() {
         <div
           className={cn(
             "group flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer",
-            depth > 0 && "ml-6"
+            depth > 0 && "ml-6",
           )}
           style={{ paddingLeft: `${12 + depth * 16}px` }}
           onClick={() => setSelectedCode(code.id)}
@@ -121,7 +121,7 @@ export function CodesView() {
           <button
             className={cn(
               "p-0.5 rounded hover:bg-muted",
-              !hasChildren && "invisible"
+              !hasChildren && "invisible",
             )}
             onClick={(e) => {
               e.stopPropagation();
@@ -152,7 +152,7 @@ export function CodesView() {
               "code-chip text-[10px] px-1.5 py-0.5",
               code.level === "main" && "code-chip-main",
               code.level === "child" && "code-chip-child",
-              code.level === "subchild" && "code-chip-subchild"
+              code.level === "subchild" && "code-chip-subchild",
             )}
           >
             {code.level}
@@ -230,7 +230,7 @@ export function CodesView() {
   };
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col relative">
       {/* Header */}
       <div className="flex items-center justify-between pb-4 border-b border-border mb-4">
         <div>

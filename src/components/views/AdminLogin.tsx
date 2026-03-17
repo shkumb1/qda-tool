@@ -1,12 +1,18 @@
-import { useState } from 'react';
-import { Lock } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { useToast } from '@/hooks/use-toast';
+import { useState } from "react";
+import { Lock } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { useToast } from "@/hooks/use-toast";
 
-const ADMIN_PASSWORD = 'admin123'; // Change this to your secure password
+const ADMIN_PASSWORD = "admin123"; // Change this to your secure password
 
 interface AdminLoginProps {
   onLogin: () => void;
@@ -14,23 +20,23 @@ interface AdminLoginProps {
 
 export function AdminLogin({ onLogin }: AdminLoginProps) {
   const { toast } = useToast();
-  const [password, setPassword] = useState('');
+  const [password, setPassword] = useState("");
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (password === ADMIN_PASSWORD) {
-      localStorage.setItem('adminAuthenticated', 'true');
+      localStorage.setItem("adminAuthenticated", "true");
       onLogin();
       toast({
-        title: 'Welcome, Admin',
-        description: 'Successfully logged in',
+        title: "Welcome, Admin",
+        description: "Successfully logged in",
       });
     } else {
       toast({
-        title: 'Access Denied',
-        description: 'Incorrect password',
-        variant: 'destructive',
+        title: "Access Denied",
+        description: "Incorrect password",
+        variant: "destructive",
       });
     }
   };

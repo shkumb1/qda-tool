@@ -1,12 +1,26 @@
-import { useState } from 'react';
-import { Copy, Link, Check, Sparkles, LogOut, BarChart3, Users } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useToast } from '@/hooks/use-toast';
+import { useState } from "react";
+import {
+  Copy,
+  Link,
+  Check,
+  Sparkles,
+  LogOut,
+  BarChart3,
+  Users,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useToast } from "@/hooks/use-toast";
 
 interface AdminDashboardProps {
   onLogout: () => void;
@@ -14,54 +28,63 @@ interface AdminDashboardProps {
 
 export function AdminDashboard({ onLogout }: AdminDashboardProps) {
   const { toast } = useToast();
-  const [participantId, setParticipantId] = useState('');
+  const [participantId, setParticipantId] = useState("");
   const [aiEnabled, setAiEnabled] = useState(true);
   const [copiedUrl, setCopiedUrl] = useState(false);
 
   const baseUrl = window.location.origin;
   const generatedUrl = participantId
-    ? `${baseUrl}/?participantId=${encodeURIComponent(participantId)}&aiEnabled=${aiEnabled}`
-    : '';
+    ? `${baseUrl}/?participantId=${encodeURIComponent(
+        participantId,
+      )}&aiEnabled=${aiEnabled}`
+    : "";
 
   const handleCopyUrl = () => {
     if (!generatedUrl) return;
-    
+
     navigator.clipboard.writeText(generatedUrl);
     setCopiedUrl(true);
     setTimeout(() => setCopiedUrl(false), 2000);
-    
+
     toast({
-      title: 'URL Copied!',
-      description: 'Participant URL copied to clipboard',
+      title: "URL Copied!",
+      description: "Participant URL copied to clipboard",
     });
   };
 
   const handleGenerateBatch = () => {
-    const count = parseInt(prompt('How many participants?') || '0');
+    const count = parseInt(prompt("How many participants?") || "0");
     if (count <= 0) return;
+
+    const timerMinutes = parseInt(
+      prompt("How many minutes for the timer?") || "0",
+    );
+    if (timerMinutes <= 0) return;
 
     const aiEnabledCount = Math.ceil(count / 2);
     const urls: string[] = [];
 
     for (let i = 1; i <= count; i++) {
-      const pid = `P${String(i).padStart(2, '0')}`;
+      const pid = `P${String(i).padStart(2, "0")}`;
       const ai = i <= aiEnabledCount;
-      const group = ai ? 'AI' : 'No-AI';
-      urls.push(`${group} - ${pid}: ${baseUrl}/?participantId=${pid}&aiEnabled=${ai}`);
+      const group = ai ? "AI" : "No-AI";
+      urls.push(
+        `${group} - ${pid}: ${baseUrl}/?participantId=${pid}&aiEnabled=${ai}&timer=${timerMinutes}`,
+      );
     }
 
-    const urlList = urls.join('\n\n');
+    const urlList = urls.join("\n\n");
     navigator.clipboard.writeText(urlList);
-    
+
     toast({
       title: `${count} URLs Generated!`,
-      description: 'All participant URLs copied to clipboard',
+      description: `All participant URLs copied to clipboard (${timerMinutes} min timer)`,
       duration: 5000,
     });
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('adminAuthenticated');
+    localStorage.removeItem("adminAuthenticated");
     onLogout();
   };
 
@@ -71,7 +94,9 @@ export function AdminDashboard({ onLogout }: AdminDashboardProps) {
       <div className="max-w-6xl mx-auto mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">Research Admin Dashboard</h1>
-          <p className="text-muted-foreground">Manage participants and view analytics</p>
+          <p className="text-muted-foreground">
+            Manage participants and view analytics
+          </p>
         </div>
         <Button variant="outline" onClick={handleLogout} className="gap-2">
           <LogOut className="h-4 w-4" />
@@ -98,7 +123,8 @@ export function AdminDashboard({ onLogout }: AdminDashboardProps) {
               <CardHeader>
                 <CardTitle>Generate Participant URLs</CardTitle>
                 <CardDescription>
-                  Create custom URLs with pre-configured participant IDs and AI permissions
+                  Create custom URLs with pre-configured participant IDs and AI
+                  permissions
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
@@ -119,7 +145,10 @@ export function AdminDashboard({ onLogout }: AdminDashboardProps) {
                 {/* AI Toggle */}
                 <div className="flex items-center justify-between p-4 border rounded-lg">
                   <div className="space-y-0.5">
-                    <Label htmlFor="ai-toggle" className="flex items-center gap-2 text-base">
+                    <Label
+                      htmlFor="ai-toggle"
+                      className="flex items-center gap-2 text-base"
+                    >
                       <Sparkles className="h-4 w-4" />
                       Enable AI Assistance
                     </Label>
@@ -184,9 +213,36 @@ export function AdminDashboard({ onLogout }: AdminDashboardProps) {
                   <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside">
                     <li>Enter a participant ID (e.g., P01, P02)</li>
                     <li>Toggle AI on/off based on their experimental group</li>
-                    <li>Click "Copy URL" and send to the participant via email</li>
-                    <li>Or use "Generate Batch" to create multiple URLs at once (splits 50/50 AI/No-AI)</li>
+                    <li>
+                      Click "Copy URL" and send to the participant via email
+                    </li>
+                    <li>
+                      Or use "Generate Batch" to create multiple URLs at once
+                      (splits 50/50 AI/No-AI)
+                    </li>
                   </ol>
+
+                  <div className="mt-4 pt-4 border-t border-accent/30">
+                    <h4 className="font-medium text-sm mb-2">
+                      💡 Testing Tip:
+                    </h4>
+                    <p className="text-xs text-muted-foreground">
+                      To clear cached data and start fresh, add{" "}
+                      <code className="px-1 py-0.5 bg-muted rounded text-foreground">
+                        &clear=true
+                      </code>{" "}
+                      to the URL:
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1 font-mono">
+                      ?participantId=P01&aiEnabled=true&timer=20
+                      <span className="text-accent font-bold">&clear=true</span>
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Or open the URL in an{" "}
+                      <strong>Incognito/Private window</strong> for a completely
+                      fresh session.
+                    </p>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -207,12 +263,30 @@ export function AdminDashboard({ onLogout }: AdminDashboardProps) {
                   <div className="rounded-lg border p-4 space-y-3">
                     <h4 className="font-medium">Study Procedure:</h4>
                     <ol className="space-y-2 list-decimal list-inside text-sm">
-                      <li><strong>Send URLs</strong> - Give each participant their unique URL with participant ID</li>
-                      <li><strong>Set Timer</strong> - Give them 10 minutes (or your chosen duration)</li>
-                      <li><strong>Participants Code</strong> - They upload documents, create codes, and analyze text</li>
-                      <li><strong>Export Data</strong> - After time is up, they click "Analytics" → "Export Research Data"</li>
-                      <li><strong>Collect CSVs</strong> - Participants send you their downloaded CSV file</li>
-                      <li><strong>Analyze</strong> - Aggregate all CSVs in Excel/SPSS/Python for statistical analysis</li>
+                      <li>
+                        <strong>Send URLs</strong> - Give each participant their
+                        unique URL with participant ID
+                      </li>
+                      <li>
+                        <strong>Set Timer</strong> - Give them 10 minutes (or
+                        your chosen duration)
+                      </li>
+                      <li>
+                        <strong>Participants Code</strong> - They upload
+                        documents, create codes, and analyze text
+                      </li>
+                      <li>
+                        <strong>Export Data</strong> - After time is up, they
+                        click "Analytics" → "Export Research Data"
+                      </li>
+                      <li>
+                        <strong>Collect CSVs</strong> - Participants send you
+                        their downloaded CSV file
+                      </li>
+                      <li>
+                        <strong>Analyze</strong> - Aggregate all CSVs in
+                        Excel/SPSS/Python for statistical analysis
+                      </li>
                     </ol>
                   </div>
 
@@ -231,7 +305,9 @@ export function AdminDashboard({ onLogout }: AdminDashboardProps) {
                         </ul>
                       </div>
                       <div>
-                        <p className="font-medium mb-1">AI Metrics (if enabled):</p>
+                        <p className="font-medium mb-1">
+                          AI Metrics (if enabled):
+                        </p>
                         <ul className="space-y-0.5 text-muted-foreground list-disc list-inside">
                           <li>AI suggestions requested</li>
                           <li>AI suggestions accepted</li>
@@ -245,9 +321,15 @@ export function AdminDashboard({ onLogout }: AdminDashboardProps) {
                   {/* Example Analysis */}
                   <div className="text-xs text-muted-foreground space-y-1">
                     <p className="font-medium">Example Comparison:</p>
-                    <p>• AI Group: Average 25 excerpts in 10 min (85% AI acceptance)</p>
+                    <p>
+                      • AI Group: Average 25 excerpts in 10 min (85% AI
+                      acceptance)
+                    </p>
                     <p>• No-AI Group: Average 18 excerpts in 10 min</p>
-                    <p>→ Statistical test shows AI significantly improves coding efficiency</p>
+                    <p>
+                      → Statistical test shows AI significantly improves coding
+                      efficiency
+                    </p>
                   </div>
                 </div>
               </CardContent>

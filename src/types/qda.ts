@@ -29,6 +29,7 @@ export interface Workspace {
   researchMode?: boolean;
   aiEnabled?: boolean;
   participantId?: string;
+  timerMinutes?: number; // Admin-configurable session timer
 }
 
 export interface CodeExcerpt {
@@ -174,7 +175,8 @@ export type AnalyticsAction =
   | "document_closed"
   | "theme_created"
   | "session_started"
-  | "session_ended";
+  | "session_ended"
+  | "timer_expired";
 
 export interface AnalyticsLog {
   id: string;
@@ -189,19 +191,19 @@ export interface AnalyticsLog {
     excerptId?: string;
     codeId?: string;
     codeName?: string;
-    
+
     // AI-specific
     aiSuggestion?: string;
     aiConfidence?: number;
     suggestionAccepted?: boolean;
-    
+
     // Timing
     duration?: number; // milliseconds
-    
+
     // Text
     excerptText?: string;
     excerptLength?: number;
-    
+
     // Additional context
     metadata?: Record<string, any>;
   };
@@ -212,24 +214,24 @@ export interface ResearchMetrics {
   workspaceId: string;
   startTime: Date;
   endTime?: Date;
-  
+
   // Coding metrics
   totalExcerpts: number;
   totalCodes: number;
   uniqueCodes: number;
   averageCodesPerExcerpt: number;
   codingSpeed: number; // excerpts per hour
-  
+
   // AI metrics (if enabled)
   aiSuggestionsRequested: number;
   aiSuggestionsAccepted: number;
   aiSuggestionsRejected: number;
   aiAcceptanceRate: number;
-  
+
   // Time metrics
   totalActiveTime: number; // milliseconds
   averageTimePerExcerpt: number;
-  
+
   // Document metrics
   documentsProcessed: number;
   totalTextCoded: number; // characters

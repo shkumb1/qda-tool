@@ -18,7 +18,7 @@ function AdminRoute() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   useEffect(() => {
-    const auth = localStorage.getItem('adminAuthenticated') === 'true';
+    const auth = localStorage.getItem("adminAuthenticated") === "true";
     setIsAuthenticated(auth);
   }, []);
 

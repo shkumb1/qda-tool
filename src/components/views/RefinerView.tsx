@@ -67,7 +67,11 @@ export function RefinerView() {
     renameCode,
     setSelectedCode,
     checkDuplicateCodeName,
+    getActiveWorkspace,
   } = useQDAStore();
+
+  const workspace = getActiveWorkspace();
+  const aiEnabled = workspace?.aiEnabled ?? true;
 
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<SortBy>("frequency");
@@ -89,7 +93,7 @@ export function RefinerView() {
   });
   const [newName, setNewName] = useState("");
   const [aiSuggestions, setAiSuggestions] = useState<AIRefinementSuggestion[]>(
-    []
+    [],
   );
   const [loadingAI, setLoadingAI] = useState(false);
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
@@ -154,7 +158,7 @@ export function RefinerView() {
           name: c.name,
           frequency: c.frequency,
           documentCount: c.documentCount,
-        }))
+        })),
       );
       setAiSuggestions(suggestions);
       setAiPanelOpen(true);
@@ -223,7 +227,7 @@ export function RefinerView() {
   };
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col relative">
       {/* Header */}
       <div className="flex items-center justify-between pb-4 border-b border-border mb-4">
         <div>
@@ -234,77 +238,81 @@ export function RefinerView() {
             Clean up and organize your {codes.length} codes
           </p>
         </div>
-        <Sheet open={aiPanelOpen} onOpenChange={setAiPanelOpen}>
-          <SheetTrigger asChild>
-            <Button
-              onClick={handleGetAISuggestions}
-              disabled={loadingAI || codes.length === 0}
-              className="gap-2"
-            >
-              {loadingAI ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Sparkles className="h-4 w-4" />
-              )}
-              AI Suggestions
-            </Button>
-          </SheetTrigger>
-          <SheetContent>
-            <SheetHeader>
-              <SheetTitle className="flex items-center gap-2">
-                <Lightbulb className="h-5 w-5 text-accent" />
-                AI Refinement Suggestions
-              </SheetTitle>
-            </SheetHeader>
-            <div className="mt-6 space-y-4">
-              {aiSuggestions.length > 0 ? (
-                aiSuggestions.map((suggestion, idx) => (
-                  <div
-                    key={idx}
-                    className="p-4 rounded-lg border border-border bg-muted/30"
-                  >
-                    <div className="flex items-start justify-between gap-2 mb-2">
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-accent/20 text-accent uppercase font-medium">
-                        {suggestion.type}
-                      </span>
-                      {suggestion.type === "merge" && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleApplyMergeSuggestion(suggestion)}
-                        >
-                          Apply
-                        </Button>
-                      )}
-                    </div>
-                    <p className="font-medium text-sm mb-1">
-                      {suggestion.suggestion}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {suggestion.reason}
-                    </p>
-                    <div className="flex flex-wrap gap-1 mt-2">
-                      {suggestion.codes.map((code) => (
-                        <span
-                          key={code}
-                          className="text-xs px-2 py-0.5 rounded bg-muted"
-                        >
-                          {code}
+        {aiEnabled && (
+          <Sheet open={aiPanelOpen} onOpenChange={setAiPanelOpen}>
+            <SheetTrigger asChild>
+              <Button
+                onClick={handleGetAISuggestions}
+                disabled={loadingAI || codes.length === 0}
+                className="gap-2"
+              >
+                {loadingAI ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Sparkles className="h-4 w-4" />
+                )}
+                AI Suggestions
+              </Button>
+            </SheetTrigger>
+            <SheetContent>
+              <SheetHeader>
+                <SheetTitle className="flex items-center gap-2">
+                  <Lightbulb className="h-5 w-5 text-accent" />
+                  AI Refinement Suggestions
+                </SheetTitle>
+              </SheetHeader>
+              <div className="mt-6 space-y-4">
+                {aiSuggestions.length > 0 ? (
+                  aiSuggestions.map((suggestion, idx) => (
+                    <div
+                      key={idx}
+                      className="p-4 rounded-lg border border-border bg-muted/30"
+                    >
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-accent/20 text-accent uppercase font-medium">
+                          {suggestion.type}
                         </span>
-                      ))}
+                        {suggestion.type === "merge" && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() =>
+                              handleApplyMergeSuggestion(suggestion)
+                            }
+                          >
+                            Apply
+                          </Button>
+                        )}
+                      </div>
+                      <p className="font-medium text-sm mb-1">
+                        {suggestion.suggestion}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {suggestion.reason}
+                      </p>
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {suggestion.codes.map((code) => (
+                          <span
+                            key={code}
+                            className="text-xs px-2 py-0.5 rounded bg-muted"
+                          >
+                            {code}
+                          </span>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                ))
-              ) : (
-                <p className="text-sm text-muted-foreground text-center py-8">
-                  {loadingAI
-                    ? "Analyzing your codes..."
-                    : 'Click "AI Suggestions" to get refinement ideas'}
-                </p>
-              )}
-            </div>
-          </SheetContent>
-        </Sheet>
+                  ))
+                ) : (
+                  <p className="text-sm text-muted-foreground text-center py-8">
+                    {loadingAI
+                      ? "Analyzing your codes..."
+                      : 'Click "AI Suggestions" to get refinement ideas'}
+                  </p>
+                )}
+              </div>
+            </SheetContent>
+          </Sheet>
+        )}{" "}
       </div>
 
       {/* Controls */}
@@ -359,7 +367,7 @@ export function RefinerView() {
               <ArrowUpDown
                 className={cn(
                   "h-4 w-4 transition-transform",
-                  sortAsc && "rotate-180"
+                  sortAsc && "rotate-180",
                 )}
               />
             </Button>
@@ -384,7 +392,7 @@ export function RefinerView() {
                 key={code.id}
                 className={cn(
                   "group p-3 rounded-lg border border-border bg-card hover:shadow-card-hover transition-all cursor-pointer",
-                  "hover:border-accent/50"
+                  "hover:border-accent/50",
                 )}
                 onClick={() => setSelectedCode(code.id)}
               >
@@ -404,7 +412,7 @@ export function RefinerView() {
                       "code-chip text-[10px] px-1.5 py-0.5 flex-shrink-0",
                       code.level === "main" && "code-chip-main",
                       code.level === "child" && "code-chip-child",
-                      code.level === "subchild" && "code-chip-subchild"
+                      code.level === "subchild" && "code-chip-subchild",
                     )}
                   >
                     {code.level}

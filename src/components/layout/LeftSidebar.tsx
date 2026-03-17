@@ -109,7 +109,7 @@ export function LeftSidebar() {
 
   // Conditional navigation based on active study and research mode
   const visibleNavItems = activeStudyId
-    ? NAV_ITEMS.filter(item => {
+    ? NAV_ITEMS.filter((item) => {
         // Show research items only if research mode enabled
         return !item.researchOnly || workspace?.researchMode;
       })

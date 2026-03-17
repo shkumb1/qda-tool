@@ -1,6 +1,6 @@
-import { useState } from 'react';
-import { useQDAStore } from '@/store/qdaStore';
-import { suggestThemes, type AIThemeSuggestion } from '@/services/aiService';
+import { useState } from "react";
+import { useQDAStore } from "@/store/qdaStore";
+import { suggestThemes, type AIThemeSuggestion } from "@/services/aiService";
 import {
   Plus,
   Trash2,
@@ -12,36 +12,44 @@ import {
   Sparkles,
   Loader2,
   Lightbulb,
-} from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogFooter,
-} from '@/components/ui/dialog';
+} from "@/components/ui/dialog";
 import {
   Sheet,
   SheetContent,
   SheetHeader,
   SheetTitle,
   SheetTrigger,
-} from '@/components/ui/sheet';
+} from "@/components/ui/sheet";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from '@/components/ui/tooltip';
-import { cn } from '@/lib/utils';
-import { useToast } from '@/hooks/use-toast';
-import type { Theme, Code } from '@/types/qda';
+} from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
+import type { Theme, Code } from "@/types/qda";
 
 const THEME_COLORS = [
-  '#ec4899', '#8b5cf6', '#0ea5e9', '#22c55e', '#f97316',
-  '#ef4444', '#06b6d4', '#84cc16', '#f59e0b', '#6366f1',
+  "#ec4899",
+  "#8b5cf6",
+  "#0ea5e9",
+  "#22c55e",
+  "#f97316",
+  "#ef4444",
+  "#06b6d4",
+  "#84cc16",
+  "#f59e0b",
+  "#6366f1",
 ];
 
 export function ThemesView() {
@@ -55,18 +63,25 @@ export function ThemesView() {
     addCodeToTheme,
     removeCodeFromTheme,
     moveCodeBetweenThemes,
+    getActiveWorkspace,
   } = useQDAStore();
+
+  const workspace = getActiveWorkspace();
+  const aiEnabled = workspace?.aiEnabled ?? true;
 
   const [expandedThemes, setExpandedThemes] = useState<Set<string>>(new Set());
   const [newThemeDialog, setNewThemeDialog] = useState(false);
-  const [editThemeDialog, setEditThemeDialog] = useState<{ open: boolean; theme: Theme | null }>({
+  const [editThemeDialog, setEditThemeDialog] = useState<{
+    open: boolean;
+    theme: Theme | null;
+  }>({
     open: false,
     theme: null,
   });
-  const [themeName, setThemeName] = useState('');
-  const [themeDescription, setThemeDescription] = useState('');
+  const [themeName, setThemeName] = useState("");
+  const [themeDescription, setThemeDescription] = useState("");
   const [themeColor, setThemeColor] = useState(THEME_COLORS[0]);
-  const [themeMemo, setThemeMemo] = useState('');
+  const [themeMemo, setThemeMemo] = useState("");
   const [draggedCode, setDraggedCode] = useState<Code | null>(null);
   const [dropTargetTheme, setDropTargetTheme] = useState<string | null>(null);
   const [aiSuggestions, setAiSuggestions] = useState<AIThemeSuggestion[]>([]);
@@ -75,7 +90,7 @@ export function ThemesView() {
 
   // Codes not assigned to any theme
   const unassignedCodes = codes.filter(
-    (code) => !themes.some((theme) => theme.codeIds.includes(code.id))
+    (code) => !themes.some((theme) => theme.codeIds.includes(code.id)),
   );
 
   const toggleExpand = (themeId: string) => {
@@ -92,15 +107,15 @@ export function ThemesView() {
     setLoadingAI(true);
     try {
       const suggestions = await suggestThemes(
-        codes.map((c) => ({ name: c.name, frequency: c.frequency }))
+        codes.map((c) => ({ name: c.name, frequency: c.frequency })),
       );
       setAiSuggestions(suggestions);
       setAiPanelOpen(true);
     } catch (error) {
       toast({
-        title: 'AI Error',
-        description: 'Failed to get theme suggestions.',
-        variant: 'destructive',
+        title: "AI Error",
+        description: "Failed to get theme suggestions.",
+        variant: "destructive",
       });
     } finally {
       setLoadingAI(false);
@@ -111,7 +126,7 @@ export function ThemesView() {
     // Create the theme
     const newTheme = addTheme(
       suggestion.name,
-      THEME_COLORS[themes.length % THEME_COLORS.length]
+      THEME_COLORS[themes.length % THEME_COLORS.length],
     );
     updateTheme(newTheme.id, { description: suggestion.description });
 
@@ -124,7 +139,7 @@ export function ThemesView() {
     });
 
     toast({
-      title: 'Theme created',
+      title: "Theme created",
       description: `"${suggestion.name}" with ${suggestion.suggestedCodes.length} codes`,
     });
   };
@@ -135,11 +150,11 @@ export function ThemesView() {
     if (themeDescription) {
       updateTheme(newTheme.id, { description: themeDescription });
     }
-    setThemeName('');
-    setThemeDescription('');
+    setThemeName("");
+    setThemeDescription("");
     setThemeColor(THEME_COLORS[themes.length % THEME_COLORS.length]);
     setNewThemeDialog(false);
-    toast({ title: 'Theme created' });
+    toast({ title: "Theme created" });
   };
 
   const handleUpdateTheme = () => {
@@ -151,7 +166,7 @@ export function ThemesView() {
       memo: themeMemo,
     });
     setEditThemeDialog({ open: false, theme: null });
-    toast({ title: 'Theme updated' });
+    toast({ title: "Theme updated" });
   };
 
   const handleDragStart = (code: Code) => {
@@ -172,7 +187,7 @@ export function ThemesView() {
     if (!draggedCode) return;
 
     const sourceTheme = themes.find((t) => t.codeIds.includes(draggedCode.id));
-    
+
     if (sourceTheme) {
       moveCodeBetweenThemes(draggedCode.id, sourceTheme.id, targetThemeId);
     } else {
@@ -181,7 +196,7 @@ export function ThemesView() {
 
     setDraggedCode(null);
     setDropTargetTheme(null);
-    toast({ title: 'Code added to theme' });
+    toast({ title: "Code added to theme" });
   };
 
   const renderThemeCard = (theme: Theme) => {
@@ -193,8 +208,8 @@ export function ThemesView() {
       <div
         key={theme.id}
         className={cn(
-          'rounded-lg border bg-card transition-all',
-          isDropTarget ? 'border-accent border-2 shadow-lg' : 'border-border'
+          "rounded-lg border bg-card transition-all",
+          isDropTarget ? "border-accent border-2 shadow-lg" : "border-border",
         )}
         onDragOver={(e) => handleDragOver(e, theme.id)}
         onDragLeave={handleDragLeave}
@@ -219,9 +234,13 @@ export function ThemesView() {
           />
 
           <div className="flex-1 min-w-0">
-            <h3 className="font-semibold text-foreground truncate">{theme.name}</h3>
+            <h3 className="font-semibold text-foreground truncate">
+              {theme.name}
+            </h3>
             {theme.description && (
-              <p className="text-xs text-muted-foreground truncate">{theme.description}</p>
+              <p className="text-xs text-muted-foreground truncate">
+                {theme.description}
+              </p>
             )}
           </div>
 
@@ -239,9 +258,9 @@ export function ThemesView() {
                   className="h-7 w-7"
                   onClick={() => {
                     setThemeName(theme.name);
-                    setThemeDescription(theme.description || '');
+                    setThemeDescription(theme.description || "");
                     setThemeColor(theme.color);
-                    setThemeMemo(theme.memo || '');
+                    setThemeMemo(theme.memo || "");
                     setEditThemeDialog({ open: true, theme });
                   }}
                 >
@@ -258,7 +277,7 @@ export function ThemesView() {
                   className="h-7 w-7 text-destructive hover:text-destructive"
                   onClick={() => {
                     deleteTheme(theme.id);
-                    toast({ title: 'Theme deleted' });
+                    toast({ title: "Theme deleted" });
                   }}
                 >
                   <Trash2 className="h-3 w-3" />
@@ -281,21 +300,26 @@ export function ThemesView() {
                         draggable
                         onDragStart={() => handleDragStart(code)}
                         className={cn(
-                          'group flex items-center gap-2 px-2.5 py-1.5 rounded-md bg-muted/50 cursor-grab active:cursor-grabbing',
-                          code.level === 'main' && 'border-l-2 border-code-main',
-                          code.level === 'child' && 'border-l-2 border-code-child',
-                          code.level === 'subchild' && 'border-l-2 border-code-subchild'
+                          "group flex items-center gap-2 px-2.5 py-1.5 rounded-md bg-muted/50 cursor-grab active:cursor-grabbing",
+                          code.level === "main" &&
+                            "border-l-2 border-code-main",
+                          code.level === "child" &&
+                            "border-l-2 border-code-child",
+                          code.level === "subchild" &&
+                            "border-l-2 border-code-subchild",
                         )}
                       >
                         <GripVertical className="h-3 w-3 text-muted-foreground" />
                         <span className="text-sm">{code.name}</span>
-                        <span className="text-xs text-muted-foreground">({code.frequency})</span>
+                        <span className="text-xs text-muted-foreground">
+                          ({code.frequency})
+                        </span>
                         <button
                           className="opacity-0 group-hover:opacity-100 ml-1 text-destructive hover:text-destructive/80 transition-opacity"
                           onClick={(e) => {
                             e.stopPropagation();
                             removeCodeFromTheme(theme.id, code.id);
-                            toast({ title: 'Code removed from theme' });
+                            toast({ title: "Code removed from theme" });
                           }}
                         >
                           <Trash2 className="h-3 w-3" />
@@ -303,7 +327,10 @@ export function ThemesView() {
                       </div>
                     </TooltipTrigger>
                     <TooltipContent>
-                      <p>{code.frequency} excerpts in {code.documentCount} documents</p>
+                      <p>
+                        {code.frequency} excerpts in {code.documentCount}{" "}
+                        documents
+                      </p>
                     </TooltipContent>
                   </Tooltip>
                 ))}
@@ -320,83 +347,89 @@ export function ThemesView() {
   };
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col relative">
       {/* Header */}
       <div className="flex items-center justify-between pb-4 border-b border-border mb-4">
         <div>
-          <h2 className="text-lg font-semibold text-foreground">Theme Builder</h2>
+          <h2 className="text-lg font-semibold text-foreground">
+            Theme Builder
+          </h2>
           <p className="text-sm text-muted-foreground">
             {themes.length} themes • Drag codes to organize
           </p>
         </div>
         <div className="flex gap-2">
-          <Sheet open={aiPanelOpen} onOpenChange={setAiPanelOpen}>
-            <SheetTrigger asChild>
-              <Button
-                variant="outline"
-                onClick={handleGetAISuggestions}
-                disabled={loadingAI || codes.length === 0}
-                className="gap-2"
-              >
-                {loadingAI ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Sparkles className="h-4 w-4" />
-                )}
-                AI Suggest
-              </Button>
-            </SheetTrigger>
-            <SheetContent>
-              <SheetHeader>
-                <SheetTitle className="flex items-center gap-2">
-                  <Lightbulb className="h-5 w-5 text-accent" />
-                  AI Theme Suggestions
-                </SheetTitle>
-              </SheetHeader>
-              <div className="mt-6 space-y-4">
-                {aiSuggestions.length > 0 ? (
-                  aiSuggestions.map((suggestion, idx) => (
-                    <div
-                      key={idx}
-                      className="p-4 rounded-lg border border-border bg-muted/30"
-                    >
-                      <div className="flex items-start justify-between gap-2 mb-2">
-                        <h4 className="font-semibold">{suggestion.name}</h4>
-                        <Button
-                          size="sm"
-                          onClick={() => handleApplyThemeSuggestion(suggestion)}
-                        >
-                          Create
-                        </Button>
-                      </div>
-                      <p className="text-sm text-muted-foreground mb-2">
-                        {suggestion.description}
-                      </p>
-                      <p className="text-xs text-muted-foreground mb-2">
-                        {suggestion.summary}
-                      </p>
-                      <div className="flex flex-wrap gap-1">
-                        {suggestion.suggestedCodes.map((code) => (
-                          <span
-                            key={code}
-                            className="text-xs px-2 py-0.5 rounded bg-muted"
+          {aiEnabled && (
+            <Sheet open={aiPanelOpen} onOpenChange={setAiPanelOpen}>
+              <SheetTrigger asChild>
+                <Button
+                  variant="outline"
+                  onClick={handleGetAISuggestions}
+                  disabled={loadingAI || codes.length === 0}
+                  className="gap-2"
+                >
+                  {loadingAI ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-4 w-4" />
+                  )}
+                  AI Suggest
+                </Button>
+              </SheetTrigger>
+              <SheetContent>
+                <SheetHeader>
+                  <SheetTitle className="flex items-center gap-2">
+                    <Lightbulb className="h-5 w-5 text-accent" />
+                    AI Theme Suggestions
+                  </SheetTitle>
+                </SheetHeader>
+                <div className="mt-6 space-y-4">
+                  {aiSuggestions.length > 0 ? (
+                    aiSuggestions.map((suggestion, idx) => (
+                      <div
+                        key={idx}
+                        className="p-4 rounded-lg border border-border bg-muted/30"
+                      >
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <h4 className="font-semibold">{suggestion.name}</h4>
+                          <Button
+                            size="sm"
+                            onClick={() =>
+                              handleApplyThemeSuggestion(suggestion)
+                            }
                           >
-                            {code}
-                          </span>
-                        ))}
+                            Create
+                          </Button>
+                        </div>
+                        <p className="text-sm text-muted-foreground mb-2">
+                          {suggestion.description}
+                        </p>
+                        <p className="text-xs text-muted-foreground mb-2">
+                          {suggestion.summary}
+                        </p>
+                        <div className="flex flex-wrap gap-1">
+                          {suggestion.suggestedCodes.map((code) => (
+                            <span
+                              key={code}
+                              className="text-xs px-2 py-0.5 rounded bg-muted"
+                            >
+                              {code}
+                            </span>
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  ))
-                ) : (
-                  <p className="text-sm text-muted-foreground text-center py-8">
-                    {loadingAI
-                      ? 'Analyzing your codes...'
-                      : 'Click "AI Suggest" to get theme ideas'}
-                  </p>
-                )}
-              </div>
-            </SheetContent>
-          </Sheet>
+                    ))
+                  ) : (
+                    <p className="text-sm text-muted-foreground text-center py-8">
+                      {loadingAI
+                        ? "Analyzing your codes..."
+                        : 'Click "AI Suggest" to get theme ideas'}
+                    </p>
+                  )}
+                </div>
+              </SheetContent>
+            </Sheet>
+          )}{" "}
           <Button onClick={() => setNewThemeDialog(true)} className="gap-2">
             <Plus className="h-4 w-4" />
             New Theme
@@ -432,10 +465,11 @@ export function ThemesView() {
                     draggable
                     onDragStart={() => handleDragStart(code)}
                     className={cn(
-                      'flex items-center gap-2 px-2.5 py-1.5 rounded-md bg-muted/50 cursor-grab active:cursor-grabbing hover:bg-muted transition-colors',
-                      code.level === 'main' && 'border-l-2 border-code-main',
-                      code.level === 'child' && 'border-l-2 border-code-child',
-                      code.level === 'subchild' && 'border-l-2 border-code-subchild'
+                      "flex items-center gap-2 px-2.5 py-1.5 rounded-md bg-muted/50 cursor-grab active:cursor-grabbing hover:bg-muted transition-colors",
+                      code.level === "main" && "border-l-2 border-code-main",
+                      code.level === "child" && "border-l-2 border-code-child",
+                      code.level === "subchild" &&
+                        "border-l-2 border-code-subchild",
                     )}
                   >
                     <GripVertical className="h-3 w-3 text-muted-foreground" />
@@ -444,7 +478,9 @@ export function ThemesView() {
                 </TooltipTrigger>
                 <TooltipContent>
                   <p className="font-medium">{code.name}</p>
-                  <p className="text-xs">{code.frequency} excerpts • {code.documentCount} docs</p>
+                  <p className="text-xs">
+                    {code.frequency} excerpts • {code.documentCount} docs
+                  </p>
                 </TooltipContent>
               </Tooltip>
             ))}
@@ -473,7 +509,9 @@ export function ThemesView() {
               />
             </div>
             <div>
-              <label className="text-sm font-medium mb-1.5 block">Description</label>
+              <label className="text-sm font-medium mb-1.5 block">
+                Description
+              </label>
               <Textarea
                 placeholder="Optional description..."
                 value={themeDescription}
@@ -488,8 +526,9 @@ export function ThemesView() {
                     <TooltipTrigger asChild>
                       <button
                         className={cn(
-                          'w-8 h-8 rounded-full transition-all',
-                          themeColor === color && 'ring-2 ring-offset-2 ring-accent'
+                          "w-8 h-8 rounded-full transition-all",
+                          themeColor === color &&
+                            "ring-2 ring-offset-2 ring-accent",
                         )}
                         style={{ backgroundColor: color }}
                         onClick={() => setThemeColor(color)}
@@ -517,7 +556,9 @@ export function ThemesView() {
       {/* Edit Theme Dialog */}
       <Dialog
         open={editThemeDialog.open}
-        onOpenChange={(open) => setEditThemeDialog({ ...editThemeDialog, open })}
+        onOpenChange={(open) =>
+          setEditThemeDialog({ ...editThemeDialog, open })
+        }
       >
         <DialogContent>
           <DialogHeader>
@@ -533,7 +574,9 @@ export function ThemesView() {
               />
             </div>
             <div>
-              <label className="text-sm font-medium mb-1.5 block">Description</label>
+              <label className="text-sm font-medium mb-1.5 block">
+                Description
+              </label>
               <Textarea
                 placeholder="Optional description..."
                 value={themeDescription}
@@ -547,8 +590,9 @@ export function ThemesView() {
                   <button
                     key={color}
                     className={cn(
-                      'w-8 h-8 rounded-full transition-all',
-                      themeColor === color && 'ring-2 ring-offset-2 ring-accent'
+                      "w-8 h-8 rounded-full transition-all",
+                      themeColor === color &&
+                        "ring-2 ring-offset-2 ring-accent",
                     )}
                     style={{ backgroundColor: color }}
                     onClick={() => setThemeColor(color)}

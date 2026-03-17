@@ -44,6 +44,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -120,6 +130,7 @@ export function StudiesDashboard() {
   const [statusFilter, setStatusFilter] = useState<StudyStatus | "all">("all");
   const [createDialog, setCreateDialog] = useState(false);
   const [editDialog, setEditDialog] = useState<Study | null>(null);
+  const [deleteDialog, setDeleteDialog] = useState<Study | null>(null);
 
   // Form state
   const [title, setTitle] = useState("");
@@ -134,7 +145,7 @@ export function StudiesDashboard() {
       study.title.toLowerCase().includes(search.toLowerCase()) ||
       study.description?.toLowerCase().includes(search.toLowerCase()) ||
       study.tags.some((tag) =>
-        tag.toLowerCase().includes(search.toLowerCase())
+        tag.toLowerCase().includes(search.toLowerCase()),
       );
     const matchesStatus =
       statusFilter === "all" || study.status === statusFilter;
@@ -214,17 +225,18 @@ export function StudiesDashboard() {
   };
 
   const handleDelete = (study: Study) => {
-    if (
-      confirm(
-        `Are you sure you want to delete "${study.title}"? This cannot be undone.`
-      )
-    ) {
-      deleteStudy(study.id);
-      toast({
-        title: "Study deleted",
-        description: `"${study.title}" has been removed.`,
-      });
-    }
+    setDeleteDialog(study);
+  };
+
+  const confirmDelete = () => {
+    if (!deleteDialog) return;
+
+    deleteStudy(deleteDialog.id);
+    toast({
+      title: "Study deleted",
+      description: `"${deleteDialog.title}" has been removed.`,
+    });
+    setDeleteDialog(null);
   };
 
   const handleDuplicate = (study: Study) => {
@@ -256,7 +268,7 @@ export function StudiesDashboard() {
         key={study.id}
         className={cn(
           "group hover:shadow-lg transition-all cursor-pointer relative overflow-hidden",
-          isActive && "ring-2 ring-accent"
+          isActive && "ring-2 ring-accent",
         )}
         style={{ borderTopColor: study.color, borderTopWidth: "4px" }}
       >
@@ -570,7 +582,7 @@ export function StudiesDashboard() {
                         "w-8 h-8 rounded-full border-2 transition-all",
                         color === c
                           ? "border-foreground scale-110"
-                          : "border-transparent"
+                          : "border-transparent",
                       )}
                       style={{ backgroundColor: c }}
                     />
@@ -607,6 +619,32 @@ export function StudiesDashboard() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog
+        open={!!deleteDialog}
+        onOpenChange={() => setDeleteDialog(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Study</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{deleteDialog?.title}"? This will
+              permanently remove the study and all its data including documents,
+              codes, themes, and excerpts. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              className="bg-destructive hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

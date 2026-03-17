@@ -8,9 +8,7 @@ const TOUR_STEPS: Step[] = [
     target: "body",
     content: (
       <div>
-        <h2 className="text-lg font-bold mb-2">
-          Welcome to ThematicFlow! 👋
-        </h2>
+        <h2 className="text-lg font-bold mb-2">Welcome to ThematicFlow! 👋</h2>
         <p>
           Let's take a quick tour to help you get started with qualitative data
           analysis. This will only take a minute!
@@ -130,8 +128,9 @@ export function OnboardingTour() {
   const { studies, activeWorkspaceId } = useQDAStore();
 
   // Check if participant mode - completely disable tour
-  const isParticipantMode = typeof window !== 'undefined' && 
-    new URLSearchParams(window.location.search).has('participantId');
+  const isParticipantMode =
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).has("participantId");
 
   // Block tour completely for participants
   if (isParticipantMode) {

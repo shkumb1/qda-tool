@@ -1,25 +1,35 @@
-import { useQDAStore } from '@/store/qdaStore';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { BarChart3, Download, Clock, Code2, FileText, Sparkles, TrendingUp } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
+import { useQDAStore } from "@/store/qdaStore";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  BarChart3,
+  Download,
+  Clock,
+  Code2,
+  FileText,
+  Sparkles,
+  TrendingUp,
+} from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 export function AnalyticsView() {
   const { toast } = useToast();
-  const {
-    getResearchMetrics,
-    exportResearchData,
-    getActiveWorkspace,
-    analyticsLogs,
-  } = useQDAStore();
+  const { getResearchMetrics, exportCSV, getActiveWorkspace, analyticsLogs } =
+    useQDAStore();
 
   const workspace = getActiveWorkspace();
-  
+
   let metrics = null;
   try {
     metrics = getResearchMetrics();
   } catch (error) {
-    console.error('Error calculating metrics:', error);
+    // Metrics calculation failed
   }
 
   if (!workspace?.researchMode) {
@@ -53,18 +63,20 @@ export function AnalyticsView() {
   }
 
   const handleExportData = () => {
-    const csv = exportResearchData();
-    const blob = new Blob([csv], { type: 'text/csv' });
+    const csv = exportCSV();
+    const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
+    const a = document.createElement("a");
     a.href = url;
-    a.download = `research-data-${metrics.participantId}-${new Date().toISOString().split('T')[0]}.csv`;
+    a.download = `qda-research-data-${metrics.participantId}-${
+      new Date().toISOString().split("T")[0]
+    }.csv`;
     a.click();
     URL.revokeObjectURL(url);
-    
+
     toast({
-      title: 'Data exported',
-      description: 'Research data has been downloaded as CSV.',
+      title: "Data exported",
+      description: "Research data has been downloaded as CSV.",
     });
   };
 
@@ -79,10 +91,12 @@ export function AnalyticsView() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h2 className="text-2xl font-bold text-foreground">Research Analytics</h2>
+          <h2 className="text-2xl font-bold text-foreground">
+            Research Analytics
+          </h2>
           <p className="text-sm text-muted-foreground">
-            Participant: {metrics.participantId} | 
-            AI {workspace.aiEnabled ? 'Enabled' : 'Disabled'}
+            Participant: {metrics.participantId} | AI{" "}
+            {workspace.aiEnabled ? "Enabled" : "Disabled"}
           </p>
         </div>
         <Button onClick={handleExportData} className="gap-2">
@@ -96,7 +110,9 @@ export function AnalyticsView() {
         {/* Total Excerpts */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Excerpts</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              Total Excerpts
+            </CardTitle>
             <FileText className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -128,10 +144,10 @@ export function AnalyticsView() {
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{metrics.codingSpeed.toFixed(1)}</div>
-            <p className="text-xs text-muted-foreground">
-              excerpts per hour
-            </p>
+            <div className="text-2xl font-bold">
+              {metrics.codingSpeed.toFixed(1)}
+            </div>
+            <p className="text-xs text-muted-foreground">excerpts per hour</p>
           </CardContent>
         </Card>
 
@@ -162,25 +178,35 @@ export function AnalyticsView() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Suggestions Requested</CardTitle>
+                <CardTitle className="text-sm font-medium">
+                  Suggestions Requested
+                </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{metrics.aiSuggestionsRequested}</div>
+                <div className="text-2xl font-bold">
+                  {metrics.aiSuggestionsRequested}
+                </div>
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Suggestions Accepted</CardTitle>
+                <CardTitle className="text-sm font-medium">
+                  Suggestions Accepted
+                </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-green-600">{metrics.aiSuggestionsAccepted}</div>
+                <div className="text-2xl font-bold text-green-600">
+                  {metrics.aiSuggestionsAccepted}
+                </div>
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Acceptance Rate</CardTitle>
+                <CardTitle className="text-sm font-medium">
+                  Acceptance Rate
+                </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
@@ -215,7 +241,7 @@ export function AnalyticsView() {
                 >
                   <div className="flex-1">
                     <span className="font-medium">
-                      {log.action.replace(/_/g, ' ')}
+                      {log.action.replace(/_/g, " ")}
                     </span>
                     {log.details.codeName && (
                       <span className="text-muted-foreground ml-2">
