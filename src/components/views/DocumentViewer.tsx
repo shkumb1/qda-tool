@@ -237,7 +237,20 @@ export function DocumentViewer() {
   }, [activeDocument, setCurrentSelection]);
 
   const handleGetAISuggestions = async () => {
-    if (!currentSelection || !activeDocument) return;
+    if (!currentSelection || !activeDocument) {
+      console.error("AI Suggestions Error: No selection or document", { 
+        hasSelection: !!currentSelection, 
+        hasDocument: !!activeDocument 
+      });
+      toast({
+        title: "Selection Required",
+        description: "Please select text in the document first.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    console.log("AI Request - Text length:", currentSelection.text.length, "Text:", currentSelection.text);
     setLoadingAI(true);
 
     // Log AI request
@@ -256,9 +269,10 @@ export function DocumentViewer() {
       );
       setAiSuggestions(suggestions);
     } catch (error) {
+      console.error("AI Suggestion Error:", error);
       toast({
         title: "AI Error",
-        description: "Failed to get code suggestions.",
+        description: error instanceof Error ? error.message : "Failed to get code suggestions.",
         variant: "destructive",
       });
     } finally {

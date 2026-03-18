@@ -33,29 +33,47 @@ async function callOpenAI(
   temperature = 0.7,
 ): Promise<string> {
   if (!OPENAI_API_KEY) {
-    throw new Error("OpenAI API key not configured");
+    throw new Error("OpenAI API key not configured. Please add VITE_OPENAI_API_KEY to your .env file.");
   }
 
-  const response = await fetch(OPENAI_API_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${OPENAI_API_KEY}`,
-    },
-    body: JSON.stringify({
-      model: "gpt-4",
-      messages,
-      temperature,
-      max_tokens: 1000,
-    }),
-  });
+  try {
+    const response = await fetch(OPENAI_API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: "gpt-4",
+        messages,
+        temperature,
+        max_tokens: 1000,
+      }),
+    });
 
-  if (!response.ok) {
-    throw new Error(`OpenAI API error: ${response.statusText}`);
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      const errorMessage = errorData.error?.message || response.statusText;
+      
+      if (response.status === 401) {
+        throw new Error("Invalid API key. Please check your OpenAI API key in .env file.");
+      } else if (response.status === 429) {
+        throw new Error("Rate limit exceeded. Please try again in a moment.");
+      } else if (response.status === 403) {
+        throw new Error("API key doesn't have access. Check your OpenAI account permissions.");
+      }
+      
+      throw new Error(`OpenAI API error (${response.status}): ${errorMessage}`);
+    }
+
+    const data = await response.json();
+    return data.choices[0].message.content;
+  } catch (error) {
+    if (error instanceof Error) {
+      throw error;
+    }
+    throw new Error("Network error. Please check your internet connection.");
   }
-
-  const data = await response.json();
-  return data.choices[0].message.content;
 }
 
 export async function suggestCodes(
@@ -71,10 +89,14 @@ export async function suggestCodes(
         )}...`
       : "";
 
-    const prompt = `You are a qualitative data analysis expert. Analyze the following selected text and suggest 3-5 relevant codes for qualitative coding.
+    const textLengthNote = selectedText.length < 20 
+      ? "\n\nNote: This is a SHORT text selection (single word or phrase). Provide 2-3 focused, specific codes appropriate for this brief excerpt."
+      : "\n\nProvide 3-5 relevant codes for this text selection.";
+
+    const prompt = `You are a qualitative data analysis expert. Analyze the following selected text and suggest relevant codes for qualitative coding.
 
 Selected text: "${selectedText}"
-${contextPrompt}
+${contextPrompt}${textLengthNote}
 
 Existing codes: ${
       existingCodes.length > 0 ? existingCodes.join(", ") : "None yet"
@@ -96,22 +118,45 @@ Consider:
     }
 2. Whether similar codes already exist
 3. Standard qualitative coding practices
+4. Even short text can be meaningfully coded
 
-Return only the JSON array, no other text.`;
+IMPORTANT: Return ONLY a valid JSON array, with no markdown formatting, no code blocks, no explanation text. Just the JSON array.`;
 
     const response = await callOpenAI([
       {
         role: "system",
         content:
-          "You are a qualitative research assistant specializing in coding interview transcripts and documents.",
+          "You are a qualitative research assistant specializing in coding interview transcripts and documents. Always return valid JSON arrays with no markdown formatting.",
       },
       { role: "user", content: prompt },
     ]);
 
-    const suggestions = JSON.parse(response);
-    return suggestions;
+    // Clean up response - remove markdown code blocks if present
+    let cleanedResponse = response.trim();
+    if (cleanedResponse.startsWith("```json")) {
+      cleanedResponse = cleanedResponse.replace(/```json\n?/, "").replace(/```$/, "").trim();
+    } else if (cleanedResponse.startsWith("```")) {
+      cleanedResponse = cleanedResponse.replace(/```\n?/, "").replace(/```$/, "").trim();
+    }
+
+    console.log("AI Response:", cleanedResponse);
+    
+    try {
+      const suggestions = JSON.parse(cleanedResponse);
+      if (!Array.isArray(suggestions)) {
+        throw new Error("AI response is not an array");
+      }
+      return suggestions;
+    } catch (parseError) {
+      console.error("JSON Parse Error:", parseError, "Response was:", cleanedResponse);
+      throw new Error(`Failed to parse AI response. The AI returned invalid JSON. Raw response: ${cleanedResponse.substring(0, 200)}`);
+    }
   } catch (error) {
-    return getKeywordBasedSuggestions(selectedText, existingCodes);
+    console.error("AI Suggestion Error:", error);
+    if (error instanceof Error) {
+      throw error;
+    }
+    throw new Error("Failed to get AI suggestions");
   }
 }
 
