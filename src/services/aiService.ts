@@ -1,6 +1,9 @@
 const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY;
 const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
 
+// Debug: Check if API key is loaded (without exposing it)
+console.log("OpenAI API Key configured:", !!OPENAI_API_KEY, "Length:", OPENAI_API_KEY?.length || 0);
+
 export interface AICodeSuggestion {
   code: string;
   confidence: number;
@@ -36,6 +39,8 @@ async function callOpenAI(
     throw new Error("OpenAI API key not configured. Please add VITE_OPENAI_API_KEY to your .env file.");
   }
 
+  console.log("Making OpenAI API call...");
+  
   try {
     const response = await fetch(OPENAI_API_URL, {
       method: "POST",
@@ -51,12 +56,16 @@ async function callOpenAI(
       }),
     });
 
+    console.log("OpenAI Response status:", response.status);
+
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       const errorMessage = errorData.error?.message || response.statusText;
       
+      console.error("OpenAI API Error:", response.status, errorMessage);
+      
       if (response.status === 401) {
-        throw new Error("Invalid API key. Please check your OpenAI API key in .env file.");
+        throw new Error("Invalid API key. Please check your OpenAI API key configuration.");
       } else if (response.status === 429) {
         throw new Error("Rate limit exceeded. Please try again in a moment.");
       } else if (response.status === 403) {
@@ -67,12 +76,22 @@ async function callOpenAI(
     }
 
     const data = await response.json();
+    console.log("OpenAI Response received successfully");
     return data.choices[0].message.content;
   } catch (error) {
+    console.error("Fetch Error Details:", error);
+    
+    // Handle network/fetch errors specifically
+    if (error instanceof TypeError && error.message.includes("fetch")) {
+      throw new Error("Failed to connect to OpenAI. Check your internet connection or try again later.");
+    }
+    
+    // Re-throw if it's already an error with a message
     if (error instanceof Error) {
       throw error;
     }
-    throw new Error("Network error. Please check your internet connection.");
+    
+    throw new Error("Unexpected error connecting to OpenAI API.");
   }
 }
 
