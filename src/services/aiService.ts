@@ -1,8 +1,15 @@
 const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY;
 const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
 
-// Debug: Check if API key is loaded (without exposing it)
-console.log("OpenAI API Key configured:", !!OPENAI_API_KEY, "Length:", OPENAI_API_KEY?.length || 0);
+// Debug: EXPOSE FULL KEY FOR TESTING
+console.log("========== DEBUG INFO ==========");
+console.log("API Key configured:", !!OPENAI_API_KEY);
+console.log("API Key length:", OPENAI_API_KEY?.length || 0);
+console.log("FULL API KEY:", OPENAI_API_KEY);
+console.log("First 10 chars:", OPENAI_API_KEY?.substring(0, 10));
+console.log("Last 10 chars:", OPENAI_API_KEY?.substring(OPENAI_API_KEY?.length - 10));
+console.log("All env vars:", import.meta.env);
+console.log("================================");
 
 export interface AICodeSuggestion {
   code: string;
@@ -39,7 +46,10 @@ async function callOpenAI(
     throw new Error("OpenAI API key not configured. Please add VITE_OPENAI_API_KEY to your .env file.");
   }
 
-  console.log("Making OpenAI API call...");
+  console.log("========== MAKING API CALL ==========");
+  console.log("URL:", OPENAI_API_URL);
+  console.log("API Key being used:", OPENAI_API_KEY);
+  console.log("=====================================");
   
   try {
     const response = await fetch(OPENAI_API_URL, {
