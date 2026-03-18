@@ -10,9 +10,20 @@ import {
   Calendar,
   Sparkles,
   Loader2,
+  Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 
@@ -30,11 +41,13 @@ export function RightPanel() {
     updateExcerpt,
     addMemo,
     updateMemo,
+    removeExcerpt,
   } = useQDAStore();
 
   const [memoInput, setMemoInput] = useState("");
   const [aiSummary, setAiSummary] = useState<AISummary | null>(null);
   const [loadingAI, setLoadingAI] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   const selectedExcerpt = excerpts.find((e) => e.id === selectedExcerptId);
   const selectedCode = codes.find((c) => c.id === selectedCodeId);
@@ -44,14 +57,14 @@ export function RightPanel() {
     setLoadingAI(true);
     try {
       const codeExcerpts = excerpts.filter((e) =>
-        e.codeIds.includes(selectedCode.id)
+        e.codeIds.includes(selectedCode.id),
       );
       const docTitles = [
         ...new Set(
           codeExcerpts.map((e) => {
             const doc = documents.find((d) => d.id === e.documentId);
             return doc?.title || "Unknown";
-          })
+          }),
         ),
       ];
 
@@ -59,7 +72,7 @@ export function RightPanel() {
         "code",
         selectedCode.name,
         codeExcerpts.map((e) => e.text),
-        docTitles
+        docTitles,
       );
       setAiSummary(summary);
     } catch (error) {
@@ -87,14 +100,25 @@ export function RightPanel() {
     );
   }
 
+  const handleDeleteExcerpt = () => {
+    if (!selectedExcerpt) return;
+    removeExcerpt(selectedExcerpt.id);
+    setSelectedExcerpt(null);
+    setDeleteDialogOpen(false);
+    toast({
+      title: "Excerpt deleted",
+      description: "The excerpt has been removed.",
+    });
+  };
+
   // Render Excerpt Details
   if (selectedExcerpt) {
     const doc = documents.find((d) => d.id === selectedExcerpt.documentId);
     const excerptCodes = codes.filter((c) =>
-      selectedExcerpt.codeIds.includes(c.id)
+      selectedExcerpt.codeIds.includes(c.id),
     );
     const excerptMemo = memos.find(
-      (m) => m.targetType === "excerpt" && m.targetId === selectedExcerpt.id
+      (m) => m.targetType === "excerpt" && m.targetId === selectedExcerpt.id,
     );
 
     return (
@@ -102,14 +126,25 @@ export function RightPanel() {
         {/* Header */}
         <div className="panel-header">
           <span className="panel-title">Excerpt Details</span>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-6 w-6"
-            onClick={() => setSelectedExcerpt(null)}
-          >
-            <X className="h-4 w-4" />
-          </Button>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 text-destructive hover:text-destructive hover:bg-destructive/10"
+              onClick={() => setDeleteDialogOpen(true)}
+              title="Delete excerpt"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6"
+              onClick={() => setSelectedExcerpt(null)}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
 
         <div className="flex-1 overflow-auto p-4 space-y-4 scrollbar-thin">
@@ -137,7 +172,7 @@ export function RightPanel() {
                     "code-chip cursor-pointer hover:opacity-80 transition-opacity",
                     code.level === "main" && "code-chip-main",
                     code.level === "child" && "code-chip-child",
-                    code.level === "subchild" && "code-chip-subchild"
+                    code.level === "subchild" && "code-chip-subchild",
                   )}
                   onClick={() => {
                     setSelectedExcerpt(null);
@@ -203,6 +238,28 @@ export function RightPanel() {
             />
           </div>
         </div>
+
+        {/* Delete Confirmation Dialog */}
+        <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Excerpt?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to delete this excerpt? This action cannot
+                be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleDeleteExcerpt}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     );
   }
@@ -210,7 +267,7 @@ export function RightPanel() {
   // Render Code Details
   if (selectedCode) {
     const codeExcerpts = excerpts.filter((e) =>
-      e.codeIds.includes(selectedCode.id)
+      e.codeIds.includes(selectedCode.id),
     );
     const childCodes = codes.filter((c) => c.parentId === selectedCode.id);
     const parentCode = selectedCode.parentId
@@ -243,7 +300,7 @@ export function RightPanel() {
                 "code-chip mb-2",
                 selectedCode.level === "main" && "code-chip-main",
                 selectedCode.level === "child" && "code-chip-child",
-                selectedCode.level === "subchild" && "code-chip-subchild"
+                selectedCode.level === "subchild" && "code-chip-subchild",
               )}
             >
               {selectedCode.level.toUpperCase()}

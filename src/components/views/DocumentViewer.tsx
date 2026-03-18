@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { useQDAStore } from "@/store/qdaStore";
 import { suggestCodes, type AICodeSuggestion } from "@/services/aiService";
 import { parseFile } from "@/utils/documentParser";
@@ -11,6 +11,7 @@ import {
   Loader2,
   Check,
   AlertTriangle,
+  Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,6 +22,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Tooltip,
   TooltipContent,
@@ -42,11 +53,13 @@ export function DocumentViewer() {
     currentSelection,
     setCurrentSelection,
     setSelectedExcerpt,
+    selectedExcerptId,
     setActiveDocument,
     addExcerpt,
     addCode,
     addDocument,
     logAction,
+    removeExcerpt,
   } = useQDAStore();
 
   const workspace = getActiveWorkspace();
@@ -61,12 +74,68 @@ export function DocumentViewer() {
   const [loadingAI, setLoadingAI] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [hoveredExcerptId, setHoveredExcerptId] = useState<string | null>(null);
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    excerptId: string;
+  } | null>(null);
+  const [deleteExcerptId, setDeleteExcerptId] = useState<string | null>(null);
   const contentRef = useRef<HTMLDivElement>(null);
 
   const activeDocument = documents.find((d) => d.id === activeDocumentId);
   const documentExcerpts = excerpts.filter(
     (e) => e.documentId === activeDocumentId,
   );
+
+  // Keyboard shortcut handler for deleting selected excerpt
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.key === "Delete" || e.key === "Backspace") && selectedExcerptId) {
+        // Don't delete if user is typing in an input/textarea
+        const target = e.target as HTMLElement;
+        if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") {
+          return;
+        }
+
+        e.preventDefault();
+        setDeleteExcerptId(selectedExcerptId);
+      }
+
+      // Close context menu on Escape
+      if (e.key === "Escape" && contextMenu) {
+        setContextMenu(null);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedExcerptId, contextMenu]);
+
+  // Close context menu on click outside
+  useEffect(() => {
+    const handleClick = () => setContextMenu(null);
+    if (contextMenu) {
+      window.addEventListener("click", handleClick);
+      return () => window.removeEventListener("click", handleClick);
+    }
+  }, [contextMenu]);
+
+  const handleDeleteExcerpt = (excerptId: string) => {
+    const excerpt = excerpts.find((e) => e.id === excerptId);
+    if (!excerpt) return;
+
+    removeExcerpt(excerptId);
+    if (selectedExcerptId === excerptId) {
+      setSelectedExcerpt(null);
+    }
+    setDeleteExcerptId(null);
+    toast({
+      title: "Excerpt deleted",
+      description: "The highlighted text has been removed.",
+    });
+    setContextMenu(null);
+  };
 
   const handleFileUpload = useCallback(
     async (files: FileList | null) => {
@@ -116,10 +185,24 @@ export function DocumentViewer() {
     const selection = window.getSelection();
     if (!selection || selection.isCollapsed || !activeDocument) return;
 
-    const text = selection.toString().trim();
-    if (!text) return;
-
     const range = selection.getRangeAt(0);
+
+    // Calculate offset within document content FIRST (before getting text)
+    const containerRect = contentRef.current?.getBoundingClientRect();
+    if (!containerRect) return;
+
+    const preSelectionRange = range.cloneRange();
+    preSelectionRange.selectNodeContents(contentRef.current!);
+    preSelectionRange.setEnd(range.startContainer, range.startOffset);
+    const startOffset = preSelectionRange.toString().length;
+
+    // Get the full selected text without trimming (to match offsets exactly)
+    const fullText = selection.toString();
+    const endOffset = startOffset + fullText.length;
+
+    // For validation, check if trimmed text is empty
+    if (!fullText.trim()) return;
+
     const rect = range.getBoundingClientRect();
 
     // Use viewport coordinates for fixed positioning
@@ -142,24 +225,15 @@ export function DocumentViewer() {
     setPopoverPosition({ x, y });
     setPopoverBelow(showBelow);
 
-    // Calculate offset within document content
-    const containerRect = contentRef.current?.getBoundingClientRect();
-    if (containerRect) {
-      const preSelectionRange = range.cloneRange();
-      preSelectionRange.selectNodeContents(contentRef.current!);
-      preSelectionRange.setEnd(range.startContainer, range.startOffset);
-      const startOffset = preSelectionRange.toString().length;
+    setCurrentSelection({
+      text: fullText,
+      startOffset,
+      endOffset,
+      documentId: activeDocument.id,
+    });
 
-      setCurrentSelection({
-        text,
-        startOffset,
-        endOffset: startOffset + text.length,
-        documentId: activeDocument.id,
-      });
-
-      setPopoverOpen(true);
-      setAiSuggestions([]);
-    }
+    setPopoverOpen(true);
+    setAiSuggestions([]);
   }, [activeDocument, setCurrentSelection]);
 
   const handleGetAISuggestions = async () => {
@@ -281,52 +355,65 @@ export function DocumentViewer() {
       (a, b) => a.startOffset - b.startOffset,
     );
 
-    if (sortedExcerpts.length === 0) {
-      return content.split("\n").map((para, i) => (
-        <p key={i} className="mb-4 leading-relaxed">
-          {para || "\u00A0"}
-        </p>
-      ));
-    }
-
     const elements: React.ReactNode[] = [];
     let lastEnd = 0;
 
     sortedExcerpts.forEach((excerpt, idx) => {
-      // Text before this excerpt
+      // Text before this excerpt - render as-is, no splitting
       if (excerpt.startOffset > lastEnd) {
         const textBefore = content.slice(lastEnd, excerpt.startOffset);
-        elements.push(
-          <span key={`text-${idx}`}>
-            {textBefore.split("\n").map((line, i, arr) => (
-              <span key={i}>
-                {line}
-                {i < arr.length - 1 && <br />}
-              </span>
-            ))}
-          </span>,
-        );
+        elements.push(<span key={`text-${idx}`}>{textBefore}</span>);
       }
 
       // The highlighted excerpt
       const excerptCodes = codes.filter((c) => excerpt.codeIds.includes(c.id));
       const primaryLevel = excerptCodes[0]?.level || "main";
 
+      // Use actual content slice to ensure perfect alignment with offsets
+      const excerptText = content.slice(excerpt.startOffset, excerpt.endOffset);
+      const isHovered = hoveredExcerptId === excerpt.id;
+      const isSelected = selectedExcerptId === excerpt.id;
+
       elements.push(
         <Tooltip key={`excerpt-${excerpt.id}`}>
           <TooltipTrigger asChild>
             <span
               className={cn(
-                "highlight-block",
+                "highlight-block relative inline-block group",
                 primaryLevel === "child" && "highlight-block-child",
                 primaryLevel === "subchild" && "highlight-block-subchild",
+                isSelected && "ring-2 ring-accent ring-offset-1",
               )}
+              onMouseEnter={() => setHoveredExcerptId(excerpt.id)}
+              onMouseLeave={() => setHoveredExcerptId(null)}
               onClick={(e) => {
                 e.stopPropagation();
                 setSelectedExcerpt(excerpt.id);
               }}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setContextMenu({
+                  x: e.clientX,
+                  y: e.clientY,
+                  excerptId: excerpt.id,
+                });
+                setSelectedExcerpt(excerpt.id);
+              }}
             >
-              {excerpt.text}
+              {excerptText}
+              {isHovered && (
+                <button
+                  className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:scale-110 z-10"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDeleteExcerptId(excerpt.id);
+                  }}
+                  title="Delete excerpt"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              )}
             </span>
           </TooltipTrigger>
           <TooltipContent>
@@ -355,24 +442,13 @@ export function DocumentViewer() {
       lastEnd = excerpt.endOffset;
     });
 
-    // Remaining text
+    // Remaining text - render as-is, no splitting
     if (lastEnd < content.length) {
       const textAfter = content.slice(lastEnd);
-      elements.push(
-        <span key="text-end">
-          {textAfter.split("\n").map((line, i, arr) => (
-            <span key={i}>
-              {line}
-              {i < arr.length - 1 && <br />}
-            </span>
-          ))}
-        </span>,
-      );
+      elements.push(<span key="text-end">{textAfter}</span>);
     }
 
-    return (
-      <div className="leading-relaxed whitespace-pre-wrap">{elements}</div>
-    );
+    return <>{elements}</>;
   };
 
   if (!activeDocument) {
@@ -464,7 +540,17 @@ export function DocumentViewer() {
       {/* Document Content */}
       <div
         ref={contentRef}
-        className="flex-1 overflow-auto scrollbar-thin relative bg-card rounded-lg border border-border p-6"
+        className="flex-1 overflow-auto scrollbar-thin relative bg-card rounded-lg border border-border p-6 leading-relaxed whitespace-pre-wrap"
+        onClick={(e) => {
+          // Deselect excerpt when clicking on blank space
+          const target = e.target as HTMLElement;
+          if (
+            target === contentRef.current ||
+            (target.tagName === "SPAN" && !target.closest(".highlight-block"))
+          ) {
+            setSelectedExcerpt(null);
+          }
+        }}
         onMouseUp={(e) => {
           // Don't handle text selection if clicking inside the popover
           const target = e.target as HTMLElement;
@@ -637,6 +723,63 @@ export function DocumentViewer() {
           </div>
         )}
       </div>
+
+      {/* Context Menu */}
+      {contextMenu && (
+        <div
+          className="fixed bg-popover border border-border rounded-md shadow-lg py-1 z-50 min-w-[160px]"
+          style={{
+            left: contextMenu.x,
+            top: contextMenu.y,
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            className="w-full px-3 py-2 text-left text-sm hover:bg-accent flex items-center gap-2 text-destructive hover:text-destructive"
+            onClick={() => setDeleteExcerptId(contextMenu.excerptId)}
+          >
+            <Trash2 className="h-4 w-4" />
+            Delete Excerpt
+          </button>
+          <button
+            className="w-full px-3 py-2 text-left text-sm hover:bg-accent flex items-center gap-2"
+            onClick={() => {
+              setSelectedExcerpt(contextMenu.excerptId);
+              setContextMenu(null);
+            }}
+          >
+            <FileText className="h-4 w-4" />
+            View Details
+          </button>
+        </div>
+      )}
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog
+        open={!!deleteExcerptId}
+        onOpenChange={(open) => !open && setDeleteExcerptId(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Excerpt?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this highlighted excerpt? This
+              action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() =>
+                deleteExcerptId && handleDeleteExcerpt(deleteExcerptId)
+              }
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
