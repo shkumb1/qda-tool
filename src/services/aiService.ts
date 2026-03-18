@@ -1,14 +1,11 @@
 const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY;
-const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
+// Use Vercel serverless function as proxy to avoid CORS
+const OPENAI_API_URL = "/api/openai";
 
 // Debug: EXPOSE FULL KEY FOR TESTING
 console.log("========== DEBUG INFO ==========");
-console.log("API Key configured:", !!OPENAI_API_KEY);
-console.log("API Key length:", OPENAI_API_KEY?.length || 0);
-console.log("FULL API KEY:", OPENAI_API_KEY);
-console.log("First 10 chars:", OPENAI_API_KEY?.substring(0, 10));
-console.log("Last 10 chars:", OPENAI_API_KEY?.substring(OPENAI_API_KEY?.length - 10));
-console.log("All env vars:", import.meta.env);
+console.log("API proxy URL:", OPENAI_API_URL);
+console.log("Using serverless function proxy (CORS fix)");
 console.log("================================");
 
 export interface AICodeSuggestion {
@@ -42,13 +39,9 @@ async function callOpenAI(
   messages: { role: string; content: string }[],
   temperature = 0.7,
 ): Promise<string> {
-  if (!OPENAI_API_KEY) {
-    throw new Error("OpenAI API key not configured. Please add VITE_OPENAI_API_KEY to your .env file.");
-  }
-
   console.log("========== MAKING API CALL ==========");
   console.log("URL:", OPENAI_API_URL);
-  console.log("API Key being used:", OPENAI_API_KEY);
+  console.log("Using proxy - API key handled server-side");
   console.log("=====================================");
   
   try {
@@ -56,7 +49,6 @@ async function callOpenAI(
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${OPENAI_API_KEY}`,
       },
       body: JSON.stringify({
         model: "gpt-4",
@@ -70,16 +62,18 @@ async function callOpenAI(
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      const errorMessage = errorData.error?.message || response.statusText;
+      const errorMessage = errorData.error?.message || errorData.details || response.statusText;
       
-      console.error("OpenAI API Error:", response.status, errorMessage);
+      console.error("OpenAI API Error:", response.status, errorData);
       
       if (response.status === 401) {
-        throw new Error("Invalid API key. Please check your OpenAI API key configuration.");
+        throw new Error("Invalid API key. Please check your OpenAI API key in Vercel environment variables.");
       } else if (response.status === 429) {
         throw new Error("Rate limit exceeded. Please try again in a moment.");
       } else if (response.status === 403) {
         throw new Error("API key doesn't have access. Check your OpenAI account permissions.");
+      } else if (response.status === 500) {
+        throw new Error(`Server error: ${errorMessage}`);
       }
       
       throw new Error(`OpenAI API error (${response.status}): ${errorMessage}`);
