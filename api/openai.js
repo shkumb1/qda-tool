@@ -19,8 +19,10 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  // TEMPORARY: Hardcoded for testing - REMOVE LATER
-  const OPENAI_API_KEY = process.env.VITE_OPENAI_API_KEY || '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';
+  // Read from Vercel environment variable
+  const OPENAI_API_KEY = process.env.OPENAI_API_KEY || process.env.VITE_OPENAI_API_KEY;
+
+  console.log('API Key present:', !!OPENAI_API_KEY);
 
   if (!OPENAI_API_KEY) {
     console.error('OpenAI API key not configured');
