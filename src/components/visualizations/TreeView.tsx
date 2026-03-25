@@ -58,17 +58,28 @@ export function TreeView({ codes }: TreeViewProps) {
       };
 
       if (themes.length > 0) {
-        themes.forEach((theme) => {
+        // Helper to recursively build theme hierarchy
+        const buildThemeNode = (theme: any): TreeNode => {
           const themeNode: TreeNode = {
             name: theme.name,
             id: theme.id,
             frequency: theme.codeIds.length,
-            level: "theme",
+            level: theme.level,
             color: theme.color,
             children: [],
           };
 
-          theme.codeIds.forEach((codeId) => {
+          // Add child themes first
+          const childThemes = themes.filter((t) => t.parentId === theme.id);
+          childThemes.forEach((childTheme) => {
+            const childNode = buildThemeNode(childTheme);
+            if (childNode) {
+              themeNode.children?.push(childNode);
+            }
+          });
+
+          // Then add codes
+          theme.codeIds.forEach((codeId: string) => {
             const code = codes.find((c) => c.id === codeId);
             if (!code) return;
 
@@ -111,6 +122,14 @@ export function TreeView({ codes }: TreeViewProps) {
             themeNode.children?.push(codeNode);
           });
 
+          if (themeNode.children?.length === 0) delete themeNode.children;
+          return themeNode;
+        };
+
+        // Start with main themes (no parent)
+        const mainThemes = themes.filter((t) => !t.parentId);
+        mainThemes.forEach((theme) => {
+          const themeNode = buildThemeNode(theme);
           if (themeNode.children && themeNode.children.length > 0) {
             root.children?.push(themeNode);
           }

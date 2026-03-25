@@ -1,12 +1,5 @@
-const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY;
 // Use Vercel serverless function as proxy to avoid CORS
 const OPENAI_API_URL = "/api/openai";
-
-// Debug: EXPOSE FULL KEY FOR TESTING
-console.log("========== DEBUG INFO ==========");
-console.log("API proxy URL:", OPENAI_API_URL);
-console.log("Using serverless function proxy (CORS fix)");
-console.log("================================");
 
 export interface AICodeSuggestion {
   code: string;
@@ -35,15 +28,37 @@ export interface AISummary {
   documentPresence: string;
 }
 
+export interface DocumentIntelligence {
+  summary: string;
+  themes: ThemeNode[];
+  keyInsights: {
+    mainPoints: string[];
+    keyQuotes: { text: string; relevance: string }[];
+    patterns: string[];
+  };
+  mindMap: MindMapNode;
+}
+
+export interface ThemeNode {
+  name: string;
+  description: string;
+  subThemes?: ThemeNode[];
+  confidence: number;
+}
+
+export interface MindMapNode {
+  id: string;
+  name: string;
+  type: "root" | "theme" | "subtheme" | "concept";
+  children?: MindMapNode[];
+  description?: string;
+  frequency?: number;
+}
+
 async function callOpenAI(
   messages: { role: string; content: string }[],
   temperature = 0.7,
 ): Promise<string> {
-  console.log("========== MAKING API CALL ==========");
-  console.log("URL:", OPENAI_API_URL);
-  console.log("Using proxy - API key handled server-side");
-  console.log("=====================================");
-  
   try {
     const response = await fetch(OPENAI_API_URL, {
       method: "POST",
@@ -396,5 +411,122 @@ Format as JSON:
       keyExcerpts: excerpts.slice(0, 3).map((e) => e.substring(0, 100) + "..."),
       documentPresence: `Found in: ${documentTitles.join(", ")}`,
     };
+  }
+}
+
+export async function analyzeDocument(
+  documentTitle: string,
+  documentContent: string,
+): Promise<DocumentIntelligence> {
+  try {
+    // Truncate very long documents for API limits
+    const maxContentLength = 6000; // Reduced for better API performance
+    const truncatedContent =
+      documentContent.length > maxContentLength
+        ? documentContent.substring(0, maxContentLength) + "\n\n[Document truncated for analysis...]"
+        : documentContent;
+
+    const prompt = `Analyze this qualitative research document and provide a comprehensive intelligence report.
+
+Document Title: "${documentTitle}"
+
+Content:
+${truncatedContent}
+
+Provide a detailed analysis as a JSON object with this EXACT structure:
+{
+  "summary": "A 2-3 paragraph executive summary",
+  "themes": [
+    {
+      "name": "Theme Name",
+      "description": "Theme description",
+      "confidence": 0.85,
+      "subThemes": [
+        {
+          "name": "Sub-theme Name",
+          "description": "Sub-theme description",
+          "confidence": 0.75
+        }
+      ]
+    }
+  ],
+  "keyInsights": {
+    "mainPoints": ["Point 1", "Point 2", "Point 3"],
+    "keyQuotes": [
+      {"text": "Quote text", "relevance": "Why it matters"}
+    ],
+    "patterns": ["Pattern 1", "Pattern 2"]
+  },
+  "mindMap": {
+    "id": "root",
+    "name": "${documentTitle}",
+    "type": "root",
+    "children": [
+      {
+        "id": "theme1",
+        "name": "Theme Name",
+        "type": "theme",
+        "description": "Theme description",
+        "children": [
+          {
+            "id": "subtheme1",
+            "name": "Sub-theme",
+            "type": "subtheme",
+            "description": "Details"
+          }
+        ]
+      }
+    ]
+  }
+}
+
+CRITICAL REQUIREMENTS:
+- Return ONLY valid JSON, no markdown formatting, no code blocks
+- Identify 3-5 main themes from the actual content
+- Each theme should have 1-3 sub-themes based on the document
+- Use actual quotes from the document text
+- Confidence values between 0.6 and 0.95`;
+
+    console.log("Starting document analysis...");
+    
+    const response = await callOpenAI(
+      [
+        {
+          role: "system",
+          content:
+            "You are an expert qualitative research analyst. Analyze documents and return ONLY a valid JSON object with no additional text, markdown formatting, or code blocks. Extract themes, patterns, and insights from the actual document content.",
+        },
+        { role: "user", content: prompt },
+      ],
+      0.3, // Lower temperature for more consistent structured output
+    );
+
+    console.log("Received analysis response, parsing JSON...");
+    
+    // Clean up response - remove markdown code blocks if present
+    let cleanedResponse = response.trim();
+    if (cleanedResponse.startsWith("```")) {
+      cleanedResponse = cleanedResponse.replace(/```json\n?/g, "").replace(/```\n?/g, "");
+    }
+    
+    const analysis = JSON.parse(cleanedResponse);
+    console.log("Document analysis successful!");
+    return analysis;
+  } catch (error) {
+    console.error("Document analysis error:", error);
+    console.error("Error details:", error instanceof Error ? error.message : String(error));
+    
+    // If it's a parsing error, throw it so the user knows
+    if (error instanceof SyntaxError) {
+      throw new Error("AI returned invalid data format. Please try again or check your API configuration.");
+    }
+    
+    // If it's an API error, pass it through
+    if (error instanceof Error) {
+      throw error;
+    }
+    
+    // Generic error
+    throw new Error("Document analysis failed unexpectedly. Please try again.");
   }
 }

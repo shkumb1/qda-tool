@@ -99,11 +99,23 @@ export function ThemesView() {
   const [aiSuggestions, setAiSuggestions] = useState<AIThemeSuggestion[]>([]);
   const [loadingAI, setLoadingAI] = useState(false);
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
+  const [addSubThemeDialog, setAddSubThemeDialog] = useState<{
+    open: boolean;
+    parentTheme: Theme | null;
+  }>({ open: false, parentTheme: null });
 
   // Codes not assigned to any theme
   const unassignedCodes = codes.filter(
     (code) => !themes.some((theme) => theme.codeIds.includes(code.id)),
   );
+
+  // Get main themes (no parent)
+  const mainThemes = themes.filter((t) => !t.parentId);
+
+  // Get child themes of a parent
+  const getChildThemes = (parentId: string) => {
+    return themes.filter((t) => t.parentId === parentId);
+  };
 
   const toggleExpand = (themeId: string) => {
     const newExpanded = new Set(expandedThemes);
@@ -167,6 +179,30 @@ export function ThemesView() {
     setThemeColor(THEME_COLORS[themes.length % THEME_COLORS.length]);
     setNewThemeDialog(false);
     toast({ title: "Theme created" });
+  };
+
+  const handleCreateSubTheme = () => {
+    if (!themeName.trim() || !addSubThemeDialog.parentTheme) return;
+
+    const newTheme = addTheme(
+      themeName,
+      themeColor,
+      addSubThemeDialog.parentTheme.id,
+    );
+    if (themeDescription) {
+      updateTheme(newTheme.id, { description: themeDescription });
+    }
+
+    const parent = addSubThemeDialog.parentTheme;
+    const levelName = parent.level === "main" ? "theme" : "sub-theme";
+    toast({
+      title: `${levelName} created`,
+      description: `"${themeName}" added under "${parent.name}".`,
+    });
+    setThemeName("");
+    setThemeDescription("");
+    setThemeColor(THEME_COLORS[0]);
+    setAddSubThemeDialog({ open: false, parentTheme: null });
   };
 
   const handleUpdateTheme = () => {
@@ -245,22 +281,37 @@ export function ThemesView() {
     }
   };
 
-  const renderThemeCard = (theme: Theme) => {
+  const renderThemeCard = (theme: Theme, depth: number = 0) => {
     const themeCodes = codes.filter((c) => theme.codeIds.includes(c.id));
+    const childThemes = getChildThemes(theme.id);
     const isExpanded = expandedThemes.has(theme.id);
     const isDropTarget = dropTargetTheme === theme.id;
+    const canAddChild = theme.level !== "subtheme"; // Only main and theme can have children
+
+    const levelStyles = {
+      main: "border-l-4 border-l-blue-500",
+      theme: "border-l-4 border-l-purple-500 ml-6",
+      subtheme: "border-l-4 border-l-pink-500 ml-12",
+    };
+
+    const levelLabels = {
+      main: "Main Theme",
+      theme: "Theme",
+      subtheme: "Sub-theme",
+    };
 
     return (
-      <div
-        key={theme.id}
-        className={cn(
-          "rounded-lg border bg-card transition-all relative",
-          isDropTarget ? "border-accent border-2 shadow-lg" : "border-border",
-        )}
-        onDragOver={(e) => handleDragOver(e, theme.id)}
-        onDragLeave={handleDragLeave}
-        onDrop={(e) => handleDrop(e, theme.id)}
-      >
+      <div key={theme.id} className="space-y-2">
+        <div
+          className={cn(
+            "rounded-lg border bg-card transition-all relative",
+            isDropTarget ? "border-accent border-2 shadow-lg" : "border-border",
+            levelStyles[theme.level],
+          )}
+          onDragOver={(e) => handleDragOver(e, theme.id)}
+          onDragLeave={handleDragLeave}
+          onDrop={(e) => handleDrop(e, theme.id)}
+        >
         {/* Copy Mode Indicator */}
         {isDropTarget && isDragCopy && (
           <div className="absolute inset-0 bg-accent/5 rounded-lg pointer-events-none flex items-center justify-center z-10">
@@ -290,9 +341,14 @@ export function ThemesView() {
           />
 
           <div className="flex-1 min-w-0">
-            <h3 className="font-semibold text-foreground truncate">
-              {theme.name}
-            </h3>
+            <div className="flex items-center gap-2">
+              <h3 className="font-semibold text-foreground truncate">
+                {theme.name}
+              </h3>
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted font-medium text-muted-foreground uppercase">
+                {levelLabels[theme.level]}
+              </span>
+            </div>
             {theme.description && (
               <p className="text-xs text-muted-foreground truncate">
                 {theme.description}
@@ -302,10 +358,31 @@ export function ThemesView() {
 
           <span className="text-sm text-muted-foreground">
             {themeCodes.length} codes
+            {childThemes.length > 0 && ` • ${childThemes.length} sub`}
           </span>
 
           {/* Actions */}
           <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+            {canAddChild && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={() => {
+                      setThemeName("");
+                      setThemeDescription("");
+                      setThemeColor(THEME_COLORS[themes.length % THEME_COLORS.length]);
+                      setAddSubThemeDialog({ open: true, parentTheme: theme });
+                    }}
+                  >
+                    <Plus className="h-3 w-3" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Add sub-{theme.level === "main" ? "theme" : "theme"}</TooltipContent>
+              </Tooltip>
+            )}
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -461,6 +538,10 @@ export function ThemesView() {
           </div>
         )}
       </div>
+
+      {/* Render child themes recursively */}
+      {childThemes.map((childTheme) => renderThemeCard(childTheme, depth + 1))}
+    </div>
     );
   };
 
@@ -588,7 +669,7 @@ export function ThemesView() {
       <div className="flex-1 flex gap-4 overflow-hidden">
         {/* Themes List */}
         <div className="flex-1 overflow-auto scrollbar-thin space-y-3">
-          {themes.map(renderThemeCard)}
+          {mainThemes.map((theme) => renderThemeCard(theme))}
 
           {themes.length === 0 && (
             <div className="flex flex-col items-center justify-center h-40 text-center bg-card rounded-lg border border-dashed border-border">
@@ -819,6 +900,72 @@ export function ThemesView() {
               Cancel
             </Button>
             <Button onClick={handleUpdateTheme}>Save</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Sub-Theme Dialog */}
+      <Dialog
+        open={addSubThemeDialog.open}
+        onOpenChange={(open) =>
+          setAddSubThemeDialog({ ...addSubThemeDialog, open })
+        }
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Add {addSubThemeDialog.parentTheme?.level === "main" ? "Theme" : "Sub-theme"} under "{addSubThemeDialog.parentTheme?.name}"
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Name</label>
+              <Input
+                placeholder="Theme name..."
+                value={themeName}
+                onChange={(e) => setThemeName(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">
+                Description
+              </label>
+              <Textarea
+                placeholder="Optional description..."
+                value={themeDescription}
+                onChange={(e) => setThemeDescription(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Color</label>
+              <div className="flex gap-2 flex-wrap">
+                {THEME_COLORS.map((color) => (
+                  <button
+                    key={color}
+                    className={cn(
+                      "w-8 h-8 rounded-full transition-all",
+                      themeColor === color &&
+                        "ring-2 ring-offset-2 ring-accent",
+                    )}
+                    style={{ backgroundColor: color }}
+                    onClick={() => setThemeColor(color)}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() =>
+                setAddSubThemeDialog({ open: false, parentTheme: null })
+              }
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleCreateSubTheme} disabled={!themeName.trim()}>
+              Create
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

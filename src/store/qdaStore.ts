@@ -947,11 +947,26 @@ export const useQDAStore = create<QDAState>()(
       // Theme actions
       addTheme: (name, color, parentId) => {
         if (!get().activeStudyId) return {} as Theme;
+        
+        // Determine level based on parent
+        let level: "main" | "theme" | "subtheme" = "main";
+        if (parentId) {
+          const parent = get().themes.find((t) => t.id === parentId);
+          if (parent) {
+            if (parent.level === "main") {
+              level = "theme";
+            } else if (parent.level === "theme") {
+              level = "subtheme";
+            }
+          }
+        }
+        
         const newTheme: Theme = {
           id: uuidv4(),
           name,
           color:
             color || THEME_COLORS[get().themes.length % THEME_COLORS.length],
+          level,
           codeIds: [],
           parentId,
           createdAt: new Date(),
@@ -977,11 +992,20 @@ export const useQDAStore = create<QDAState>()(
 
       deleteTheme: (id) => {
         if (!get().activeStudyId) return;
+        
+        // Recursively delete child themes
+        const getAllChildThemeIds = (themeId: string): string[] => {
+          const children = get().themes.filter((t) => t.parentId === themeId);
+          const childIds = children.map((c) => c.id);
+          const grandchildIds = childIds.flatMap(getAllChildThemeIds);
+          return [themeId, ...childIds, ...grandchildIds];
+        };
+        
+        const themeIdsToDelete = getAllChildThemeIds(id);
+        
         set((state) =>
           updateActiveStudyData(state, {
-            themes: state.themes.filter(
-              (t) => t.id !== id && t.parentId !== id,
-            ),
+            themes: state.themes.filter((t) => !themeIdsToDelete.includes(t.id)),
           }),
         );
       },
@@ -1560,6 +1584,7 @@ export const useQDAStore = create<QDAState>()(
     }),
     {
       name: "qda-storage",
+      version: 1,
       partialize: (state) => ({
         workspaces: state.workspaces,
         activeWorkspaceId: state.activeWorkspaceId,
@@ -1569,6 +1594,32 @@ export const useQDAStore = create<QDAState>()(
         analyticsLogs: state.analyticsLogs,
         sessionStartTime: state.sessionStartTime,
       }),
+      onRehydrateStorage: () => (state) => {
+        if (state) {
+          // Migrate existing themes to have levels
+          const migratedStudies = state.studies.map((study) => ({
+            ...study,
+            themes: study.themes.map((theme) => ({
+              ...theme,
+              // Set default level to "main" if not present, or determine from parent
+              level: (theme as any).level || 
+                (theme.parentId 
+                  ? (study.themes.find((t) => t.id === theme.parentId) as any)?.level === "main"
+                    ? "theme"
+                    : "subtheme"
+                  : "main") as "main" | "theme" | "subtheme",
+            })),
+          }));
+          
+          state.studies = migratedStudies;
+          
+          // Sync active study data
+          const activeStudy = migratedStudies.find((s) => s.id === state.activeStudyId);
+          if (activeStudy) {
+            state.themes = activeStudy.themes;
+          }
+        }
+      },
     },
   ),
 );

@@ -58,11 +58,14 @@ export interface Code {
   documentCount: number;
 }
 
+export type ThemeLevel = "main" | "theme" | "subtheme";
+
 export interface Theme {
   id: string;
   name: string;
   description?: string;
   color: string;
+  level: ThemeLevel;
   memo?: string;
   codeIds: string[];
   parentId?: string;

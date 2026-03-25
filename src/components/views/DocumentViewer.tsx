@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { useQDAStore } from "@/store/qdaStore";
 import { suggestCodes, type AICodeSuggestion } from "@/services/aiService";
 import { parseFile } from "@/utils/documentParser";
+import { DocumentIntelligence } from "@/components/views/DocumentIntelligence";
 import {
   FileText,
   Upload,
@@ -12,6 +13,7 @@ import {
   Check,
   AlertTriangle,
   Trash2,
+  Brain,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -81,6 +83,7 @@ export function DocumentViewer() {
     excerptId: string;
   } | null>(null);
   const [deleteExcerptId, setDeleteExcerptId] = useState<string | null>(null);
+  const [intelligenceOpen, setIntelligenceOpen] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
 
   const activeDocument = documents.find((d) => d.id === activeDocumentId);
@@ -283,6 +286,41 @@ export function DocumentViewer() {
   const handleCreateExcerpt = () => {
     if (!currentSelection) return;
 
+    // CRITICAL: Clear browser selection FIRST to prevent duplicate highlighting
+    window.getSelection()?.removeAllRanges();
+
+    // Check for overlapping excerpts to prevent duplication issues
+    const hasOverlap = documentExcerpts.some((existing) => {
+      // Check if there's any overlap between the new and existing excerpt
+      return (
+        existing.documentId === currentSelection.documentId &&
+        (
+          // New excerpt starts within existing one
+          (currentSelection.startOffset >= existing.startOffset &&
+            currentSelection.startOffset < existing.endOffset) ||
+          // New excerpt ends within existing one
+          (currentSelection.endOffset > existing.startOffset &&
+            currentSelection.endOffset <= existing.endOffset) ||
+          // New excerpt completely contains existing one
+          (currentSelection.startOffset <= existing.startOffset &&
+            currentSelection.endOffset >= existing.endOffset)
+        )
+      );
+    });
+
+    if (hasOverlap) {
+      toast({
+        title: "Overlapping excerpt",
+        description: "This text overlaps with an existing highlight. Please select a different area or delete the existing highlight first.",
+        variant: "destructive",
+      });
+      setPopoverOpen(false);
+      setNewCodeName("");
+      setSelectedCodes([]);
+      setAiSuggestions([]);
+      return;
+    }
+
     // Create new code if name provided
     let codeIds = [...selectedCodes];
     if (newCodeName.trim()) {
@@ -302,7 +340,6 @@ export function DocumentViewer() {
     setNewCodeName("");
     setSelectedCodes([]);
     setAiSuggestions([]);
-    window.getSelection()?.removeAllRanges();
   };
 
   const toggleCodeSelection = (codeId: string) => {
@@ -315,6 +352,43 @@ export function DocumentViewer() {
 
   const handleApplyAISuggestion = (suggestion: AICodeSuggestion) => {
     if (!currentSelection) return;
+    
+    // CRITICAL: Clear browser selection FIRST to prevent duplicate highlighting
+    window.getSelection()?.removeAllRanges();
+    
+    // Check for overlapping excerpts to prevent duplication issues
+    const hasOverlap = documentExcerpts.some((existing) => {
+      // Check if there's any overlap between the new and existing excerpt
+      return (
+        existing.documentId === currentSelection.documentId &&
+        (
+          // New excerpt starts within existing one
+          (currentSelection.startOffset >= existing.startOffset &&
+            currentSelection.startOffset < existing.endOffset) ||
+          // New excerpt ends within existing one
+          (currentSelection.endOffset > existing.startOffset &&
+            currentSelection.endOffset <= existing.endOffset) ||
+          // New excerpt completely contains existing one
+          (currentSelection.startOffset <= existing.startOffset &&
+            currentSelection.endOffset >= existing.endOffset)
+        )
+      );
+    });
+
+    if (hasOverlap) {
+      toast({
+        title: "Overlapping excerpt",
+        description: "This text overlaps with an existing highlight. Please select a different area or delete the existing highlight first.",
+        variant: "destructive",
+      });
+      setPopoverOpen(false);
+      setCurrentSelection(null);
+      setAiSuggestions([]);
+      setSelectedCodes([]);
+      setNewCodeName("");
+      return;
+    }
+    
     let codeId: string;
 
     if (suggestion.existingMatch) {
@@ -352,7 +426,7 @@ export function DocumentViewer() {
       description: `Applied code: "${suggestion.code}"`,
     });
 
-    // Close popover and reset
+    // Close popover and reset state
     setPopoverOpen(false);
     setCurrentSelection(null);
     setAiSuggestions([]);
@@ -373,6 +447,14 @@ export function DocumentViewer() {
     let lastEnd = 0;
 
     sortedExcerpts.forEach((excerpt, idx) => {
+      // CRITICAL FIX: Skip overlapping excerpts to prevent text duplication
+      if (excerpt.startOffset < lastEnd) {
+        console.warn(`Skipping overlapping excerpt ${excerpt.id}: starts at ${excerpt.startOffset} but lastEnd is ${lastEnd}`);
+        // Update lastEnd if this excerpt extends beyond the current one
+        lastEnd = Math.max(lastEnd, excerpt.endOffset);
+        return;
+      }
+
       // Text before this excerpt - render as-is, no splitting
       if (excerpt.startOffset > lastEnd) {
         const textBefore = content.slice(lastEnd, excerpt.startOffset);
@@ -544,7 +626,25 @@ export function DocumentViewer() {
             {documentExcerpts.length} excerpts coded • Select text to code
           </p>
         </div>
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <div className="flex items-center gap-2">
+          {aiEnabled && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIntelligenceOpen(true)}
+                  className="gap-2"
+                >
+                  <Brain className="h-4 w-4" />
+                  Document Intelligence
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                AI-powered summary, themes, and mind map
+              </TooltipContent>
+            </Tooltip>
+          )}
           <span className="px-2 py-1 bg-muted rounded text-xs uppercase font-medium">
             {activeDocument.type}
           </span>
@@ -794,6 +894,17 @@ export function DocumentViewer() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Document Intelligence Panel */}
+      {activeDocument && (
+        <DocumentIntelligence
+          documentId={activeDocument.id}
+          documentTitle={activeDocument.title}
+          documentContent={activeDocument.content}
+          open={intelligenceOpen}
+          onOpenChange={setIntelligenceOpen}
+        />
+      )}
     </div>
   );
 }

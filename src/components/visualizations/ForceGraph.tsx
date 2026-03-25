@@ -8,6 +8,16 @@ import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   RotateCcw,
   Link as LinkIcon,
   Trash2,
@@ -44,6 +54,7 @@ interface ManualNode {
   y: number;
   frequency: number;
   level?: string;
+  sizeCategory?: "small" | "medium" | "large" | "xlarge";
 }
 
 interface ManualLink {
@@ -67,6 +78,55 @@ export function ForceGraph({ codes, themes }: ForceGraphProps) {
   const [manualLinks, setManualLinks] = useState<ManualLink[]>([]);
   const [linkSourceId, setLinkSourceId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [sizeContextMenu, setSizeContextMenu] = useState<{
+    x: number;
+    y: number;
+    nodeId: string;
+  } | null>(null);
+  const [draggedFromPalette, setDraggedFromPalette] = useState<{
+    item: Code | Theme;
+    isTheme: boolean;
+  } | null>(null);
+  const [deleteConfirmNode, setDeleteConfirmNode] = useState<ManualNode | null>(null);
+  
+  // Refs to hold current state for drag handlers (avoid stale closures)
+  const manualNodesRef = useRef<ManualNode[]>([]);
+  const manualLinksRef = useRef<ManualLink[]>([]);
+  
+  // Keep refs in sync with state
+  useEffect(() => {
+    manualNodesRef.current = manualNodes;
+  }, [manualNodes]);
+  
+  useEffect(() => {
+    manualLinksRef.current = manualLinks;
+  }, [manualLinks]);
+
+  // Helper function to calculate node radius based on size category or frequency
+  const getNodeRadius = (node: ManualNode) => {
+    if (node.sizeCategory) {
+      const sizeMap = {
+        small: 15,
+        medium: 25,
+        large: 35,
+        xlarge: 50,
+      };
+      return sizeMap[node.sizeCategory];
+    }
+    // Default calculation based on frequency
+    return Math.sqrt(node.frequency) * 3 + 8;
+  };
+
+  // Generate a unique ID for copied nodes
+  const generateCopyId = (originalId: string): string => {
+    let copyNum = 1;
+    let newId = `${originalId}-copy${copyNum}`;
+    while (manualNodesRef.current.some((n) => n.id === newId)) {
+      copyNum++;
+      newId = `${originalId}-copy${copyNum}`;
+    }
+    return newId;
+  };
 
   useEffect(() => {
     const updateDimensions = () => {
@@ -85,6 +145,17 @@ export function ForceGraph({ codes, themes }: ForceGraphProps) {
     window.addEventListener("resize", updateDimensions);
     return () => window.removeEventListener("resize", updateDimensions);
   }, [isAutoLayout]);
+
+  // Close context menu on click outside
+  useEffect(() => {
+    const handleClick = () => setSizeContextMenu(null);
+    if (sizeContextMenu) {
+      window.addEventListener("click", handleClick);
+      return () => window.removeEventListener("click", handleClick);
+    }
+  }, [sizeContextMenu]);
+
+
 
   // Auto layout rendering
   useEffect(() => {
@@ -106,6 +177,16 @@ export function ForceGraph({ codes, themes }: ForceGraphProps) {
         frequency: theme.codeIds.length * 10,
         color: theme.color,
       });
+    });
+
+    // Add links between parent and child themes
+    themes.forEach((theme) => {
+      if (theme.parentId && themes.some((t) => t.id === theme.parentId)) {
+        links.push({
+          source: theme.parentId,
+          target: theme.id,
+        });
+      }
     });
 
     const codesInThemes = new Set(themes.flatMap((t) => t.codeIds));
@@ -330,8 +411,9 @@ export function ForceGraph({ codes, themes }: ForceGraphProps) {
       .attr("transform", (d) => `translate(${d.x},${d.y})`)
       .attr("cursor", "pointer");
 
-    // Drag behavior for repositioning with click detection
+    // Drag behavior for repositioning nodes
     let hasMoved = false;
+    
     const dragBehavior = d3
       .drag<SVGGElement, ManualNode>()
       .on("start", function (event, d) {
@@ -357,24 +439,23 @@ export function ForceGraph({ codes, themes }: ForceGraphProps) {
       .on("end", function (event, d) {
         if (hasMoved) {
           // Update state with final position
-          const newNodes = manualNodes.map((n) =>
+          setManualNodes((prev) => prev.map((n) =>
             n.id === d.id ? { ...n, x: event.x, y: event.y } : n,
-          );
-          setManualNodes(newNodes);
+          ));
         } else {
           // Was a click, not a drag - handle linking logic
           if (linkSourceId && linkSourceId !== "select") {
             // Creating a link - second click
             if (
               linkSourceId !== d.id &&
-              !manualLinks.some(
+              !manualLinksRef.current.some(
                 (l) =>
                   (l.source === linkSourceId && l.target === d.id) ||
                   (l.source === d.id && l.target === linkSourceId),
               )
             ) {
-              setManualLinks([
-                ...manualLinks,
+              setManualLinks((prev) => [
+                ...prev,
                 { source: linkSourceId, target: d.id },
               ]);
             }
@@ -398,7 +479,7 @@ export function ForceGraph({ codes, themes }: ForceGraphProps) {
 
     nodeGroups
       .append("circle")
-      .attr("r", (d) => Math.sqrt(d.frequency) * 3 + 8)
+      .attr("r", (d) => getNodeRadius(d))
       .attr("fill", (d) => d.color)
       .attr("stroke", (d) => {
         if (d.id === selectedNodeId) return "hsl(var(--accent))";
@@ -418,10 +499,21 @@ export function ForceGraph({ codes, themes }: ForceGraphProps) {
       .append("text")
       .text((d) => d.name)
       .attr("text-anchor", "middle")
-      .attr("dy", (d) => Math.sqrt(d.frequency) * 3 + 20)
+      .attr("dy", (d) => getNodeRadius(d) + 12)
       .attr("font-size", "10px")
       .attr("fill", "hsl(var(--foreground))")
       .attr("opacity", 0.8);
+
+    // Right-click context menu for size selection
+    nodeGroups.on("contextmenu", (event, d) => {
+      event.preventDefault();
+      event.stopPropagation();
+      setSizeContextMenu({
+        x: event.clientX,
+        y: event.clientY,
+        nodeId: d.id,
+      });
+    });
 
     // Delete button on hover
     const deleteBtn = nodeGroups
@@ -432,7 +524,7 @@ export function ForceGraph({ codes, themes }: ForceGraphProps) {
       .attr(
         "transform",
         (d) =>
-          `translate(${Math.sqrt(d.frequency) * 3 + 8}, ${-Math.sqrt(d.frequency) * 3 - 8})`,
+          `translate(${getNodeRadius(d)}, ${-getNodeRadius(d)})`,
       );
 
     deleteBtn
@@ -458,40 +550,92 @@ export function ForceGraph({ codes, themes }: ForceGraphProps) {
 
     deleteBtn.on("click", (event, d) => {
       event.stopPropagation();
-      setManualNodes(manualNodes.filter((n) => n.id !== d.id));
-      setManualLinks(
-        manualLinks.filter((l) => l.source !== d.id && l.target !== d.id),
-      );
+      setDeleteConfirmNode(d);
     });
   };
 
-  const handleAddToCanvas = (item: Code | Theme, isTheme: boolean) => {
+  const handleAddToCanvas = (item: Code | Theme, isTheme: boolean, position?: { x: number; y: number }) => {
     // Check if already on canvas
-    if (manualNodes.some((n) => n.id === item.id)) return;
+    if (manualNodesRef.current.some((n) => n.id === item.id)) return;
 
-    // Calculate grid position
-    const cols = 4;
-    const spacing = 120;
-    const offsetX = 100;
-    const offsetY = 100;
-    const index = manualNodes.length;
-    const row = Math.floor(index / cols);
-    const col = index % cols;
+    let x: number, y: number;
+    
+    if (position) {
+      // Use provided position (from drag-and-drop)
+      x = position.x;
+      y = position.y;
+    } else {
+      // Calculate grid position
+      const cols = 4;
+      const spacing = 120;
+      const offsetX = 100;
+      const offsetY = 100;
+      const index = manualNodesRef.current.length;
+      const row = Math.floor(index / cols);
+      const col = index % cols;
+      x = offsetX + col * spacing;
+      y = offsetY + row * spacing;
+    }
 
     const newNode: ManualNode = {
       id: item.id,
       name: item.name,
       type: isTheme ? "theme" : "code",
       color: item.color,
-      x: offsetX + col * spacing,
-      y: offsetY + row * spacing,
+      x,
+      y,
       frequency: isTheme
         ? (item as Theme).codeIds.length * 10
         : (item as Code).frequency || 1,
       level: isTheme ? undefined : (item as Code).level,
+      sizeCategory: undefined, // Start with default size
     };
 
-    setManualNodes([...manualNodes, newNode]);
+    setManualNodes((prev) => [...prev, newNode]);
+  };
+
+  const handleSetNodeSize = (nodeId: string, size: "small" | "medium" | "large" | "xlarge") => {
+    setManualNodes((prev) =>
+      prev.map((n) =>
+        n.id === nodeId ? { ...n, sizeCategory: size } : n,
+      ),
+    );
+    setSizeContextMenu(null);
+  };
+
+  const handleDuplicateNode = (nodeId: string) => {
+    const node = manualNodesRef.current.find((n) => n.id === nodeId);
+    if (!node) return;
+
+    const newId = generateCopyId(nodeId);
+    const duplicatedNode: ManualNode = {
+      ...node,
+      id: newId,
+      name: `${node.name} (copy)`,
+      x: node.x + 50, // Offset to the right
+      y: node.y + 50, // Offset down
+    };
+
+    setManualNodes((prev) => [...prev, duplicatedNode]);
+    setSizeContextMenu(null);
+  };
+
+  const handleCanvasDrop = (event: React.DragEvent) => {
+    event.preventDefault();
+    if (!draggedFromPalette) return;
+
+    const svgRect = svgRef.current?.getBoundingClientRect();
+    if (!svgRect) return;
+
+    const x = event.clientX - svgRect.left;
+    const y = event.clientY - svgRect.top;
+
+    handleAddToCanvas(draggedFromPalette.item, draggedFromPalette.isTheme, { x, y });
+    setDraggedFromPalette(null);
+  };
+
+  const handleCanvasDragOver = (event: React.DragEvent) => {
+    event.preventDefault();
   };
 
   const handleReset = () => {
@@ -548,11 +692,24 @@ export function ForceGraph({ codes, themes }: ForceGraphProps) {
                       <div
                         key={theme.id}
                         className={cn(
-                          "flex items-center gap-2 p-2 rounded-md cursor-pointer hover:bg-muted transition-colors",
+                          "flex items-center gap-2 p-2 rounded-md cursor-grab active:cursor-grabbing hover:bg-muted transition-colors",
                           manualNodes.some((n) => n.id === theme.id) &&
                             "opacity-50",
                         )}
+                        draggable
                         onClick={() => handleAddToCanvas(theme, true)}
+                        onDragStart={(e) => {
+                          setDraggedFromPalette({ item: theme, isTheme: true });
+                          // Set drag image to show what's being dragged
+                          const dragImg = document.createElement("div");
+                          dragImg.style.position = "absolute";
+                          dragImg.style.top = "-1000px";
+                          dragImg.textContent = theme.name;
+                          document.body.appendChild(dragImg);
+                          e.dataTransfer.setDragImage(dragImg, 0, 0);
+                          setTimeout(() => document.body.removeChild(dragImg), 0);
+                        }}
+                        onDragEnd={() => setDraggedFromPalette(null)}
                       >
                         <div
                           className="w-4 h-4 rounded-full flex-shrink-0"
@@ -579,11 +736,24 @@ export function ForceGraph({ codes, themes }: ForceGraphProps) {
                       <div
                         key={code.id}
                         className={cn(
-                          "flex items-center gap-2 p-2 rounded-md cursor-pointer hover:bg-muted transition-colors",
+                          "flex items-center gap-2 p-2 rounded-md cursor-grab active:cursor-grabbing hover:bg-muted transition-colors",
                           manualNodes.some((n) => n.id === code.id) &&
                             "opacity-50",
                         )}
+                        draggable
                         onClick={() => handleAddToCanvas(code, false)}
+                        onDragStart={(e) => {
+                          setDraggedFromPalette({ item: code, isTheme: false });
+                          // Set drag image to show what's being dragged
+                          const dragImg = document.createElement("div");
+                          dragImg.style.position = "absolute";
+                          dragImg.style.top = "-1000px";
+                          dragImg.textContent = code.name;
+                          document.body.appendChild(dragImg);
+                          e.dataTransfer.setDragImage(dragImg, 0, 0);
+                          setTimeout(() => document.body.removeChild(dragImg), 0);
+                        }}
+                        onDragEnd={() => setDraggedFromPalette(null)}
                       >
                         <div
                           className="w-3 h-3 rounded-sm flex-shrink-0"
@@ -605,14 +775,20 @@ export function ForceGraph({ codes, themes }: ForceGraphProps) {
           </ScrollArea>
 
           {/* Manual Mode Instructions */}
-          <div className="p-3 border-t border-border bg-muted/30">
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              <strong>Click</strong> items to add
-              <br />
-              <strong>Drag</strong> to move
-              <br />
-              <strong>Click link icon</strong>, then 2 nodes
-            </p>
+          <div className="p-3 border-t border-border bg-primary/10">
+            <div className="text-xs font-semibold text-foreground mb-2">
+              💡 Quick Guide
+            </div>
+            <div className="text-xs text-muted-foreground space-y-1 leading-relaxed">
+              <div><strong>Click/Drag</strong> items to add to canvas</div>
+              <div><strong>Drag</strong> nodes to reposition</div>
+              <div className="text-primary font-semibold">
+                <strong>Right-click</strong> → Duplicate to copy nodes
+              </div>
+              <div><strong>Right-click</strong> to change size</div>
+              <div><strong>Link button</strong>, then click 2 nodes</div>
+              <div><strong>Hover</strong> on node to delete</div>
+            </div>
           </div>
         </div>
       )}
@@ -671,6 +847,8 @@ export function ForceGraph({ codes, themes }: ForceGraphProps) {
           width={dimensions.width}
           height={dimensions.height}
           className="bg-muted/5"
+          onDrop={handleCanvasDrop}
+          onDragOver={handleCanvasDragOver}
         />
 
         {!isAutoLayout && manualNodes.length === 0 && (
@@ -693,7 +871,109 @@ export function ForceGraph({ codes, themes }: ForceGraphProps) {
             </span>
           </div>
         )}
+
+
       </div>
+
+      {/* Size Context Menu */}
+      {sizeContextMenu && (
+        <div
+          className="fixed bg-popover border-2 border-primary rounded-md shadow-2xl py-1 z-50 min-w-[200px]"
+          style={{
+            left: sizeContextMenu.x,
+            top: sizeContextMenu.y,
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="px-3 py-2 text-xs font-bold text-primary border-b-2 border-primary flex items-center gap-2">
+            <span>🎯</span> NODE OPTIONS
+          </div>
+          <button
+            className="w-full px-3 py-2.5 text-left text-sm hover:bg-accent flex items-center gap-3 group border-b border-border"
+            onClick={() => handleDuplicateNode(sizeContextMenu.nodeId)}
+          >
+            <span className="text-lg">📋</span>
+            <div className="flex-1">
+              <div className="font-semibold text-primary">Duplicate Node</div>
+              <div className="text-xs text-muted-foreground">Create a copy</div>
+            </div>
+          </button>
+          <div className="px-3 py-1.5 text-xs font-medium text-muted-foreground bg-muted/50">
+            Resize Node
+          </div>
+          <button
+            className="w-full px-3 py-2.5 text-left text-sm hover:bg-accent flex items-center gap-3 group"
+            onClick={() => handleSetNodeSize(sizeContextMenu.nodeId, "small")}
+          >
+            <div className="w-3 h-3 rounded-full bg-current opacity-40 group-hover:opacity-60" />
+            <div className="flex-1">
+              <div className="font-medium">Small</div>
+              <div className="text-xs text-muted-foreground">Details/concepts</div>
+            </div>
+          </button>
+          <button
+            className="w-full px-3 py-2.5 text-left text-sm hover:bg-accent flex items-center gap-3 group"
+            onClick={() => handleSetNodeSize(sizeContextMenu.nodeId, "medium")}
+          >
+            <div className="w-5 h-5 rounded-full bg-current opacity-40 group-hover:opacity-60" />
+            <div className="flex-1">
+              <div className="font-medium">Medium</div>
+              <div className="text-xs text-muted-foreground">Sub-themes</div>
+            </div>
+          </button>
+          <button
+            className="w-full px-3 py-2.5 text-left text-sm hover:bg-accent flex items-center gap-3 group"
+            onClick={() => handleSetNodeSize(sizeContextMenu.nodeId, "large")}
+          >
+            <div className="w-7 h-7 rounded-full bg-current opacity-40 group-hover:opacity-60" />
+            <div className="flex-1">
+              <div className="font-medium">Large</div>
+              <div className="text-xs text-muted-foreground">Main themes</div>
+            </div>
+          </button>
+          <button
+            className="w-full px-3 py-2.5 text-left text-sm hover:bg-accent flex items-center gap-3 group"
+            onClick={() => handleSetNodeSize(sizeContextMenu.nodeId, "xlarge")}
+          >
+            <div className="w-10 h-10 rounded-full bg-current opacity-40 group-hover:opacity-60" />
+            <div className="flex-1">
+              <div className="font-medium">Extra Large</div>
+              <div className="text-xs text-muted-foreground">Core categories</div>
+            </div>
+          </button>
+        </div>
+      )}
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!deleteConfirmNode} onOpenChange={(open) => !open && setDeleteConfirmNode(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove Node from Canvas?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to remove <strong className="text-foreground">"{deleteConfirmNode?.name}"</strong> from the canvas?
+              <br /><br />
+              This will also remove any connections to this node. This action only removes it from the visualization canvas.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (deleteConfirmNode) {
+                  setManualNodes((prev) => prev.filter((n) => n.id !== deleteConfirmNode.id));
+                  setManualLinks((prev) =>
+                    prev.filter((l) => l.source !== deleteConfirmNode.id && l.target !== deleteConfirmNode.id),
+                  );
+                  setDeleteConfirmNode(null);
+                }
+              }}
+              className="bg-destructive hover:bg-destructive/90"
+            >
+              Remove
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
