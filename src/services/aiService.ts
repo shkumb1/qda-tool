@@ -63,7 +63,7 @@ async function callOpenAI(
 ): Promise<string> {
   try {
     const requestBody: any = {
-      model: "gpt-4",
+      model: "gpt-4o", // gpt-4o supports JSON mode
       messages,
       temperature,
       max_tokens: maxTokens,
