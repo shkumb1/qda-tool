@@ -58,19 +58,28 @@ export interface MindMapNode {
 async function callOpenAI(
   messages: { role: string; content: string }[],
   temperature = 0.7,
+  useJsonMode = false,
+  maxTokens = 1000,
 ): Promise<string> {
   try {
+    const requestBody: any = {
+      model: "gpt-4",
+      messages,
+      temperature,
+      max_tokens: maxTokens,
+    };
+    
+    // Use JSON mode for structured outputs
+    if (useJsonMode) {
+      requestBody.response_format = { type: "json_object" };
+    }
+    
     const response = await fetch(OPENAI_API_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        model: "gpt-4",
-        messages,
-        temperature,
-        max_tokens: 1000,
-      }),
+      body: JSON.stringify(requestBody),
     });
 
     console.log("OpenAI Response status:", response.status);
@@ -167,7 +176,7 @@ IMPORTANT: Return ONLY a valid JSON array, with no markdown formatting, no code 
           "You are a qualitative research assistant specializing in coding interview transcripts and documents. Always return valid JSON arrays with no markdown formatting.",
       },
       { role: "user", content: prompt },
-    ]);
+    ], 0.7, true, 1000);
 
     // Clean up response - remove markdown code blocks if present
     let cleanedResponse = response.trim();
@@ -318,6 +327,8 @@ Return only the JSON array.`;
         { role: "user", content: prompt },
       ],
       0.5,
+      true,
+      1000,
     );
 
     return JSON.parse(response).slice(0, 5);
@@ -357,6 +368,8 @@ Return only the JSON array.`;
         { role: "user", content: prompt },
       ],
       0.6,
+      true,
+      1000,
     );
 
     return JSON.parse(response);
@@ -400,7 +413,7 @@ Format as JSON:
           "You are a qualitative research assistant providing insights on coded data.",
       },
       { role: "user", content: prompt },
-    ]);
+    ], 0.7, true, 1000);
 
     return JSON.parse(response);
   } catch (error) {
@@ -499,6 +512,8 @@ CRITICAL REQUIREMENTS:
         { role: "user", content: prompt },
       ],
       0.3, // Lower temperature for more consistent structured output
+      true, // Enable JSON mode
+      2500, // Increased token limit for comprehensive analysis
     );
 
     console.log("Received analysis response, parsing JSON...");
