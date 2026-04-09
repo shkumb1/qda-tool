@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQDAStore } from "@/store/qdaStore";
+import { useHelpStore } from "@/store/helpStore";
 import {
   Users,
   Plus,
@@ -43,6 +44,7 @@ export function WorkspaceSelector() {
     joinWorkspace,
     clearLegacyStudies,
   } = useQDAStore();
+  const { setShowOnboarding } = useHelpStore();
 
   const { toast } = useToast();
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -78,6 +80,11 @@ export function WorkspaceSelector() {
     setCreateDialogOpen(false);
     setWorkspaceName("");
     setCollaboratorName("");
+
+    // Trigger onboarding tour for new workspace
+    setTimeout(() => {
+      setShowOnboarding(true);
+    }, 500);
 
     toast({
       title: "Workspace created!",

@@ -28,15 +28,15 @@ export function MindMapVisualization({
     // Zoom behavior
     const zoom = d3
       .zoom<SVGSVGElement, unknown>()
-      .scaleExtent([0.5, 2])
+      .scaleExtent([0.3, 3])
       .on("zoom", (event) => {
         g.attr("transform", event.transform);
       });
 
     svg.call(zoom);
 
-    // Create tree layout
-    const tree = d3.tree<MindMapNode>().size([height - 100, width - 300]);
+    // Create tree layout - use more available space
+    const tree = d3.tree<MindMapNode>().size([height - 80, width - 100]);
 
     const root = d3.hierarchy(data);
     const treeData = tree(root);
@@ -56,8 +56,8 @@ export function MindMapVisualization({
             d3.HierarchyLink<MindMapNode>,
             d3.HierarchyPointNode<MindMapNode>
           >()
-          .x((d) => d.y + 150)
-          .y((d) => d.x + 50),
+          .x((d) => d.y + 50)
+          .y((d) => d.x + 40),
       );
 
     // Draw nodes
@@ -66,7 +66,7 @@ export function MindMapVisualization({
       .data(treeData.descendants())
       .join("g")
       .attr("class", "node")
-      .attr("transform", (d) => `translate(${d.y + 150},${d.x + 50})`)
+      .attr("transform", (d) => `translate(${d.y + 50},${d.x + 40})`)
       .style("cursor", "pointer")
       .on("click", (event, d) => {
         event.stopPropagation();
@@ -77,10 +77,10 @@ export function MindMapVisualization({
     nodes
       .append("circle")
       .attr("r", (d) => {
-        if (d.data.type === "root") return 12;
-        if (d.data.type === "theme") return 10;
-        if (d.data.type === "subtheme") return 8;
-        return 6;
+        if (d.data.type === "root") return 16;
+        if (d.data.type === "theme") return 12;
+        if (d.data.type === "subtheme") return 10;
+        return 8;
       })
       .attr("fill", (d) => {
         if (d.data.type === "root") return "hsl(var(--primary))";
@@ -95,27 +95,35 @@ export function MindMapVisualization({
     nodes
       .append("text")
       .attr("dy", 4)
-      .attr("x", (d) => (d.children ? -15 : 15))
+      .attr("x", (d) => (d.children ? -20 : 20))
       .style("text-anchor", (d) => (d.children ? "end" : "start"))
-      .style("font-size", (d) => (d.data.type === "root" ? "14px" : "12px"))
-      .style("font-weight", (d) => (d.data.type === "root" ? "bold" : "normal"))
+      .style("font-size", (d) => {
+        if (d.data.type === "root") return "16px";
+        if (d.data.type === "theme") return "14px";
+        return "12px";
+      })
+      .style("font-weight", (d) =>
+        d.data.type === "root" || d.data.type === "theme" ? "600" : "normal",
+      )
       .style("fill", "hsl(var(--foreground))")
       .text((d) => d.data.name);
 
     // Node descriptions on hover
-    nodes
-      .append("title")
-      .text((d) => d.data.description || d.data.name);
+    nodes.append("title").text((d) => d.data.description || d.data.name);
 
-    // Center the view
+    // Center the view with better initial zoom
     const bounds = g.node()?.getBBox();
     if (bounds) {
-      const scale = 0.9 / Math.max(bounds.width / width, bounds.height / height);
+      // Use less aggressive scaling to show content larger
+      const scaleX = (width * 0.85) / bounds.width;
+      const scaleY = (height * 0.85) / bounds.height;
+      const scale = Math.min(scaleX, scaleY, 1.2); // Cap at 1.2x for readability
+
       const translate: [number, number] = [
         width / 2 - (bounds.x + bounds.width / 2) * scale,
         height / 2 - (bounds.y + bounds.height / 2) * scale,
       ];
-      
+
       svg.call(
         zoom.transform,
         d3.zoomIdentity.translate(translate[0], translate[1]).scale(scale),

@@ -68,12 +68,12 @@ async function callOpenAI(
       temperature,
       max_tokens: maxTokens,
     };
-    
+
     // Use JSON mode for structured outputs
     if (useJsonMode) {
       requestBody.response_format = { type: "json_object" };
     }
-    
+
     const response = await fetch(OPENAI_API_URL, {
       method: "POST",
       headers: {
@@ -86,20 +86,25 @@ async function callOpenAI(
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      const errorMessage = errorData.error?.message || errorData.details || response.statusText;
-      
+      const errorMessage =
+        errorData.error?.message || errorData.details || response.statusText;
+
       console.error("OpenAI API Error:", response.status, errorData);
-      
+
       if (response.status === 401) {
-        throw new Error("Invalid API key. Please check your OpenAI API key in Vercel environment variables.");
+        throw new Error(
+          "Invalid API key. Please check your OpenAI API key in Vercel environment variables.",
+        );
       } else if (response.status === 429) {
         throw new Error("Rate limit exceeded. Please try again in a moment.");
       } else if (response.status === 403) {
-        throw new Error("API key doesn't have access. Check your OpenAI account permissions.");
+        throw new Error(
+          "API key doesn't have access. Check your OpenAI account permissions.",
+        );
       } else if (response.status === 500) {
         throw new Error(`Server error: ${errorMessage}`);
       }
-      
+
       throw new Error(`OpenAI API error (${response.status}): ${errorMessage}`);
     }
 
@@ -108,17 +113,19 @@ async function callOpenAI(
     return data.choices[0].message.content;
   } catch (error) {
     console.error("Fetch Error Details:", error);
-    
+
     // Handle network/fetch errors specifically
     if (error instanceof TypeError && error.message.includes("fetch")) {
-      throw new Error("Failed to connect to OpenAI. Check your internet connection or try again later.");
+      throw new Error(
+        "Failed to connect to OpenAI. Check your internet connection or try again later.",
+      );
     }
-    
+
     // Re-throw if it's already an error with a message
     if (error instanceof Error) {
       throw error;
     }
-    
+
     throw new Error("Unexpected error connecting to OpenAI API.");
   }
 }
@@ -136,9 +143,10 @@ export async function suggestCodes(
         )}...`
       : "";
 
-    const textLengthNote = selectedText.length < 20 
-      ? "\n\nNote: This is a SHORT text selection (single word or phrase). Provide 2-3 focused, specific codes appropriate for this brief excerpt."
-      : "\n\nProvide 3-5 relevant codes for this text selection.";
+    const textLengthNote =
+      selectedText.length < 20
+        ? "\n\nNote: This is a SHORT text selection (single word or phrase). Provide 2-3 focused, specific codes appropriate for this brief excerpt."
+        : "\n\nProvide 3-5 relevant codes for this text selection.";
 
     const prompt = `You are a qualitative data analysis expert. Analyze the following selected text and suggest relevant codes for qualitative coding.
 
@@ -169,25 +177,36 @@ Consider:
 
 IMPORTANT: Return ONLY a valid JSON array, with no markdown formatting, no code blocks, no explanation text. Just the JSON array.`;
 
-    const response = await callOpenAI([
-      {
-        role: "system",
-        content:
-          "You are a qualitative research assistant specializing in coding interview transcripts and documents. Always return valid JSON arrays with no markdown formatting.",
-      },
-      { role: "user", content: prompt },
-    ], 0.7, true, 1000);
+    const response = await callOpenAI(
+      [
+        {
+          role: "system",
+          content:
+            "You are a qualitative research assistant specializing in coding interview transcripts and documents. Always return valid JSON arrays with no markdown formatting.",
+        },
+        { role: "user", content: prompt },
+      ],
+      0.7,
+      true,
+      1000,
+    );
 
     // Clean up response - remove markdown code blocks if present
     let cleanedResponse = response.trim();
     if (cleanedResponse.startsWith("```json")) {
-      cleanedResponse = cleanedResponse.replace(/```json\n?/, "").replace(/```$/, "").trim();
+      cleanedResponse = cleanedResponse
+        .replace(/```json\n?/, "")
+        .replace(/```$/, "")
+        .trim();
     } else if (cleanedResponse.startsWith("```")) {
-      cleanedResponse = cleanedResponse.replace(/```\n?/, "").replace(/```$/, "").trim();
+      cleanedResponse = cleanedResponse
+        .replace(/```\n?/, "")
+        .replace(/```$/, "")
+        .trim();
     }
 
     console.log("AI Response:", cleanedResponse);
-    
+
     try {
       const suggestions = JSON.parse(cleanedResponse);
       if (!Array.isArray(suggestions)) {
@@ -195,8 +214,15 @@ IMPORTANT: Return ONLY a valid JSON array, with no markdown formatting, no code 
       }
       return suggestions;
     } catch (parseError) {
-      console.error("JSON Parse Error:", parseError, "Response was:", cleanedResponse);
-      throw new Error(`Failed to parse AI response. The AI returned invalid JSON. Raw response: ${cleanedResponse.substring(0, 200)}`);
+      console.error(
+        "JSON Parse Error:",
+        parseError,
+        "Response was:",
+        cleanedResponse,
+      );
+      throw new Error(
+        `Failed to parse AI response. The AI returned invalid JSON. Raw response: ${cleanedResponse.substring(0, 200)}`,
+      );
     }
   } catch (error) {
     console.error("AI Suggestion Error:", error);
@@ -406,14 +432,19 @@ Format as JSON:
   "documentPresence": "Description of where it appears"
 }`;
 
-    const response = await callOpenAI([
-      {
-        role: "system",
-        content:
-          "You are a qualitative research assistant providing insights on coded data.",
-      },
-      { role: "user", content: prompt },
-    ], 0.7, true, 1000);
+    const response = await callOpenAI(
+      [
+        {
+          role: "system",
+          content:
+            "You are a qualitative research assistant providing insights on coded data.",
+        },
+        { role: "user", content: prompt },
+      ],
+      0.7,
+      true,
+      1000,
+    );
 
     return JSON.parse(response);
   } catch (error) {
@@ -427,16 +458,58 @@ Format as JSON:
   }
 }
 
+export type AnalysisDepth = "quick" | "standard" | "deep";
+
 export async function analyzeDocument(
   documentTitle: string,
   documentContent: string,
+  depth: AnalysisDepth = "standard",
 ): Promise<DocumentIntelligence> {
   try {
+    // Configure based on depth
+    const depthConfig = {
+      quick: {
+        maxContent: 6000,
+        themes: "3-4",
+        subThemesPerTheme: "1-2",
+        levels: 2,
+        targetNodes: "8-12",
+        mainPoints: "3-5",
+        quotes: "2-3",
+        patterns: "2-3",
+        maxTokens: 2000,
+      },
+      standard: {
+        maxContent: 10000,
+        themes: "4-6",
+        subThemesPerTheme: "2-3",
+        levels: 3,
+        targetNodes: "12-18",
+        mainPoints: "5-7",
+        quotes: "3-5",
+        patterns: "3-5",
+        maxTokens: 2800,
+      },
+      deep: {
+        maxContent: 15000,
+        themes: "5-8",
+        subThemesPerTheme: "2-4",
+        levels: 3,
+        targetNodes: "18-30",
+        mainPoints: "6-10",
+        quotes: "5-8",
+        patterns: "4-7",
+        maxTokens: 3500,
+      },
+    };
+
+    const config = depthConfig[depth];
+
     // Truncate very long documents for API limits
-    const maxContentLength = 6000; // Reduced for better API performance
     const truncatedContent =
-      documentContent.length > maxContentLength
-        ? documentContent.substring(0, maxContentLength) + "\n\n[Document truncated for analysis...]"
+      documentContent.length > config.maxContent
+        ? documentContent.substring(0, config.maxContent) +
+          "\n\n[Document truncated for analysis...]"
         : documentContent;
 
     const prompt = `Analyze this qualitative research document and provide a comprehensive intelligence report.
@@ -448,7 +521,7 @@ ${truncatedContent}
 
 Provide a detailed analysis as a JSON object with this EXACT structure:
 {
-  "summary": "A 2-3 paragraph executive summary",
+  "summary": "A 2-3 paragraph summary of the document's main content and findings",
   "themes": [
     {
       "name": "Theme Name",
@@ -464,7 +537,7 @@ Provide a detailed analysis as a JSON object with this EXACT structure:
     }
   ],
   "keyInsights": {
-    "mainPoints": ["Point 1", "Point 2", "Point 3"],
+    "mainPoints": ["Point 1", "Point 2", "Point 3", "Point 4", "Point 5"],
     "keyQuotes": [
       {"text": "Quote text", "relevance": "Why it matters"}
     ],
@@ -485,7 +558,19 @@ Provide a detailed analysis as a JSON object with this EXACT structure:
             "id": "subtheme1",
             "name": "Sub-theme",
             "type": "subtheme",
-            "description": "Details"
+            "description": "Details"${
+              config.levels >= 3
+                ? `,
+            "children": [
+              {
+                "id": "concept1",
+                "name": "Specific Concept",
+                "type": "concept",
+                "description": "Detailed aspect"
+              }
+            ]`
+                : ""
+            }
           }
         ]
       }
@@ -495,13 +580,18 @@ Provide a detailed analysis as a JSON object with this EXACT structure:
 
 CRITICAL REQUIREMENTS:
 - Return ONLY valid JSON, no markdown formatting, no code blocks
-- Identify 3-5 main themes from the actual content
-- Each theme should have 1-3 sub-themes based on the document
+- Identify ${config.themes} main themes from the actual content
+- Each theme should have ${config.subThemesPerTheme} sub-themes with specific examples
+${config.levels >= 3 ? `- Sub-themes can have 1-2 concept nodes for granular detail` : ""}
+- Create a rich hierarchy (aim for ${config.targetNodes} total nodes)
 - Use actual quotes from the document text
-- Confidence values between 0.6 and 0.95`;
+- Confidence values between 0.6 and 0.95
+- Main points should have ${config.mainPoints} items
+- Extract ${config.quotes} key quotes with relevance explanations
+- Identify ${config.patterns} patterns`;
 
-    console.log("Starting document analysis...");
-    
+    console.log(`Starting document analysis (${depth} mode)...`);
+
     const response = await callOpenAI(
       [
         {
@@ -513,34 +603,41 @@ CRITICAL REQUIREMENTS:
       ],
       0.3, // Lower temperature for more consistent structured output
       true, // Enable JSON mode
-      2500, // Increased token limit for comprehensive analysis
+      config.maxTokens, // Token limit based on analysis depth
     );
 
     console.log("Received analysis response, parsing JSON...");
-    
+
     // Clean up response - remove markdown code blocks if present
     let cleanedResponse = response.trim();
     if (cleanedResponse.startsWith("```")) {
-      cleanedResponse = cleanedResponse.replace(/```json\n?/g, "").replace(/```\n?/g, "");
+      cleanedResponse = cleanedResponse
+        .replace(/```json\n?/g, "")
+        .replace(/```\n?/g, "");
     }
-    
+
     const analysis = JSON.parse(cleanedResponse);
     console.log("Document analysis successful!");
     return analysis;
   } catch (error) {
     console.error("Document analysis error:", error);
-    console.error("Error details:", error instanceof Error ? error.message : String(error));
-    
+    console.error(
+      "Error details:",
+      error instanceof Error ? error.message : String(error),
+    );
+
     // If it's a parsing error, throw it so the user knows
     if (error instanceof SyntaxError) {
-      throw new Error("AI returned invalid data format. Please try again or check your API configuration.");
+      throw new Error(
+        "AI returned invalid data format. Please try again or check your API configuration.",
+      );
     }
-    
+
     // If it's an API error, pass it through
     if (error instanceof Error) {
       throw error;
     }
-    
+
     // Generic error
     throw new Error("Document analysis failed unexpectedly. Please try again.");
   }

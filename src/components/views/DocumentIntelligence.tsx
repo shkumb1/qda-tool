@@ -5,6 +5,7 @@ import {
   type DocumentIntelligence as DocIntel,
   type ThemeNode,
   type MindMapNode,
+  type AnalysisDepth,
 } from "@/services/aiService";
 import { MindMapVisualization } from "@/components/visualizations/MindMapVisualization";
 import {
@@ -16,6 +17,11 @@ import {
   Check,
   Download,
   ChevronRight,
+  Zap,
+  Target,
+  Microscope,
+  FileStack,
+  AlertCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -34,8 +40,18 @@ import {
 } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
+
+type AnalysisScope = "current" | "all";
 
 interface DocumentIntelligenceProps {
   documentId: string;
@@ -53,28 +69,63 @@ export function DocumentIntelligence({
   onOpenChange,
 }: DocumentIntelligenceProps) {
   const { toast } = useToast();
-  const { addTheme, updateTheme } = useQDAStore();
+  const { addTheme, updateTheme, documents: studyDocuments } = useQDAStore();
   const [analysis, setAnalysis] = useState<DocIntel | null>(null);
   const [loading, setLoading] = useState(false);
   const [selectedNode, setSelectedNode] = useState<MindMapNode | null>(null);
   const [createdThemes, setCreatedThemes] = useState<Set<string>>(new Set());
+  const [analysisDepth, setAnalysisDepth] = useState<AnalysisDepth>("standard");
+  const [analysisScope, setAnalysisScope] = useState<AnalysisScope>("current");
+
+  // Get available documents for study-wide analysis
+  const availableDocuments = studyDocuments.filter((doc) => doc.content && doc.content.trim().length > 0);
+  const canAnalyzeAll = availableDocuments.length > 0;
+  const documentCount = availableDocuments.length;
 
   const handleAnalyze = async () => {
     setLoading(true);
     try {
-      const result = await analyzeDocument(documentTitle, documentContent);
+      let result: DocIntel;
+      
+      if (analysisScope === "all") {
+        // Analyze all documents in the study
+        const combinedContent = availableDocuments
+          .map((doc) => `=== Document: ${doc.title} ===\n\n${doc.content}\n\n`)
+          .join("\n");
+        const combinedTitle = `Study Analysis (${availableDocuments.length} documents)`;
+        
+        result = await analyzeDocument(
+          combinedTitle,
+          combinedContent,
+          analysisDepth,
+        );
+        
+        toast({
+          title: "Study analysis complete",
+          description: `Analyzed ${availableDocuments.length} documents successfully`,
+        });
+      } else {
+        // Analyze current document only
+        result = await analyzeDocument(
+          documentTitle,
+          documentContent,
+          analysisDepth,
+        );
+        
+        toast({
+          title: "Analysis complete",
+          description: "Document intelligence generated successfully",
+        });
+      }
+      
       setAnalysis(result);
-      toast({
-        title: "Analysis complete",
-        description: "Document intelligence generated successfully",
-      });
     } catch (error) {
       console.error("Analysis error:", error);
       toast({
         title: "Analysis failed",
         description:
-          error instanceof Error 
-            ? error.message 
+          error instanceof Error
+            ? error.message
             : "Unable to analyze document. Please check your OpenAI API configuration.",
         variant: "destructive",
       });
@@ -89,7 +140,7 @@ export function DocumentIntelligence({
       themeData.name,
       "#8b5cf6", // Default purple color
     );
-    
+
     if (themeData.description) {
       updateTheme(newTheme.id, { description: themeData.description });
     }
@@ -97,11 +148,7 @@ export function DocumentIntelligence({
     // Create child themes
     if (themeData.subThemes && themeData.subThemes.length > 0) {
       themeData.subThemes.forEach((subTheme) => {
-        const childTheme = addTheme(
-          subTheme.name,
-          "#a78bfa",
-          newTheme.id,
-        );
+        const childTheme = addTheme(subTheme.name, "#a78bfa", newTheme.id);
         if (subTheme.description) {
           updateTheme(childTheme.id, { description: subTheme.description });
         }
@@ -109,7 +156,7 @@ export function DocumentIntelligence({
     }
 
     setCreatedThemes(new Set([...createdThemes, themeData.name]));
-    
+
     toast({
       title: "Theme created",
       description: `"${themeData.name}" ${themeData.subThemes?.length ? `with ${themeData.subThemes.length} sub-themes ` : ""}added to your project`,
@@ -145,7 +192,7 @@ export function DocumentIntelligence({
 
   const renderThemeTree = (theme: ThemeNode, depth = 0) => {
     const isCreated = createdThemes.has(theme.name);
-    
+
     return (
       <div key={theme.name} className={cn("space-y-2", depth > 0 && "ml-6")}>
         <Card className={cn(depth === 0 ? "bg-muted/30" : "bg-background")}>
@@ -184,7 +231,9 @@ export function DocumentIntelligence({
         </Card>
         {theme.subThemes && theme.subThemes.length > 0 && (
           <div className="space-y-2">
-            {theme.subThemes.map((subTheme) => renderThemeTree(subTheme, depth + 1))}
+            {theme.subThemes.map((subTheme) =>
+              renderThemeTree(subTheme, depth + 1),
+            )}
           </div>
         )}
       </div>
@@ -202,10 +251,12 @@ export function DocumentIntelligence({
                 Document Intelligence
               </SheetTitle>
               <p className="text-sm text-muted-foreground mt-1">
-                {documentTitle}
+                {analysis && analysisScope === "all" 
+                  ? `Study Analysis (${availableDocuments.length} documents)`
+                  : documentTitle}
               </p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 mr-8">
               {analysis && (
                 <Button
                   variant="outline"
@@ -217,6 +268,50 @@ export function DocumentIntelligence({
                   Export
                 </Button>
               )}
+
+              {analysis && (
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm" className="gap-2">
+                      <Target className="h-4 w-4" />
+                      {analysisDepth.charAt(0).toUpperCase() +
+                        analysisDepth.slice(1)}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-64">
+                    <div className="space-y-3">
+                      <p className="text-sm font-medium">Analysis Depth</p>
+                      <div className="space-y-2">
+                        {(["quick", "standard", "deep"] as const).map(
+                          (mode) => (
+                            <Button
+                              key={mode}
+                              variant={
+                                analysisDepth === mode ? "default" : "outline"
+                              }
+                              onClick={() => setAnalysisDepth(mode)}
+                              className="w-full justify-start"
+                              size="sm"
+                            >
+                              {mode === "quick" && (
+                                <Zap className="h-4 w-4 mr-2" />
+                              )}
+                              {mode === "standard" && (
+                                <Target className="h-4 w-4 mr-2" />
+                              )}
+                              {mode === "deep" && (
+                                <Microscope className="h-4 w-4 mr-2" />
+                              )}
+                              {mode.charAt(0).toUpperCase() + mode.slice(1)}
+                            </Button>
+                          ),
+                        )}
+                      </div>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              )}
+
               <Button
                 onClick={handleAnalyze}
                 disabled={loading}
@@ -234,8 +329,8 @@ export function DocumentIntelligence({
                   </>
                 ) : (
                   <>
-                    <Brain className="h-4 w-4" />
-                    Analyze Document
+                    {analysisScope === "all" ? <FileStack className="h-4 w-4" /> : <Brain className="h-4 w-4" />}
+                    {analysisScope === "all" ? "Analyze Study" : "Analyze Document"}
                   </>
                 )}
               </Button>
@@ -252,16 +347,105 @@ export function DocumentIntelligence({
               AI-Powered Document Analysis
             </h3>
             <p className="text-sm text-muted-foreground max-w-md mb-6">
-              Get an executive summary, detect themes, visualize concepts with a
-              mind map, and extract key insights from your document.
+              Get a summary, detect themes, visualize concepts with a mind map,
+              and extract key insights from your document.
             </p>
-            <Button onClick={handleAnalyze} className="gap-2">
-              <Brain className="h-4 w-4" />
-              Start Analysis
+
+            {/* Analysis Scope Selector */}
+            <div className="mb-6 w-full max-w-md">
+              <p className="text-sm font-medium mb-3">Analysis Scope</p>
+              <RadioGroup
+                value={analysisScope}
+                onValueChange={(value) => setAnalysisScope(value as AnalysisScope)}
+                className="space-y-3"
+              >
+                <div 
+                  className="flex items-start space-x-3 rounded-lg border p-4 cursor-pointer hover:bg-muted/50 transition-colors"
+                  onClick={() => setAnalysisScope("current")}
+                >
+                  <RadioGroupItem value="current" id="current" />
+                  <div className="flex-1">
+                    <Label htmlFor="current" className="cursor-pointer font-medium">
+                      <div className="flex items-center gap-2">
+                        <FileText className="h-4 w-4" />
+                        Current Document
+                      </div>
+                    </Label>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Analyze: {documentTitle}
+                    </p>
+                  </div>
+                </div>
+                <div 
+                  className={cn(
+                    "flex items-start space-x-3 rounded-lg border p-4 transition-colors",
+                    canAnalyzeAll ? "cursor-pointer hover:bg-muted/50" : "opacity-60 cursor-not-allowed"
+                  )}
+                  onClick={() => canAnalyzeAll && setAnalysisScope("all")}
+                >
+                  <RadioGroupItem value="all" id="all" disabled={!canAnalyzeAll} />
+                  <div className="flex-1">
+                    <Label htmlFor="all" className={cn("font-medium", canAnalyzeAll ? "cursor-pointer" : "cursor-not-allowed")}>
+                      <div className="flex items-center gap-2">
+                        <FileStack className="h-4 w-4" />
+                        All Documents in Study
+                      </div>
+                    </Label>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {documentCount === 0 && "No documents available in this study"}
+                      {documentCount > 0 && `Analyze all ${documentCount} document${documentCount === 1 ? '' : 's'} together`}
+                    </p>
+                  </div>
+                </div>
+              </RadioGroup>
+            </div>
+
+            {/* Analysis Depth Selector */}
+            <div className="mb-6 w-full max-w-md">
+              <p className="text-sm font-medium mb-3">Analysis Depth</p>
+              <div className="grid grid-cols-3 gap-2">
+                <Button
+                  variant={analysisDepth === "quick" ? "default" : "outline"}
+                  onClick={() => setAnalysisDepth("quick")}
+                  className="flex flex-col h-auto py-3 px-2"
+                >
+                  <Zap className="h-5 w-5 mb-1" />
+                  <span className="text-xs font-medium">Quick</span>
+                  <span className="text-[10px] opacity-70">3-4 themes</span>
+                </Button>
+                <Button
+                  variant={analysisDepth === "standard" ? "default" : "outline"}
+                  onClick={() => setAnalysisDepth("standard")}
+                  className="flex flex-col h-auto py-3 px-2"
+                >
+                  <Target className="h-5 w-5 mb-1" />
+                  <span className="text-xs font-medium">Standard</span>
+                  <span className="text-[10px] opacity-70">4-6 themes</span>
+                </Button>
+                <Button
+                  variant={analysisDepth === "deep" ? "default" : "outline"}
+                  onClick={() => setAnalysisDepth("deep")}
+                  className="flex flex-col h-auto py-3 px-2"
+                >
+                  <Microscope className="h-5 w-5 mb-1" />
+                  <span className="text-xs font-medium">Deep</span>
+                  <span className="text-[10px] opacity-70">5-8 themes</span>
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                {analysisDepth === "quick" &&
+                  "Fast analysis focusing on core themes (8-12 nodes)"}
+                {analysisDepth === "standard" &&
+                  "Balanced analysis with detailed theme hierarchy (12-18 nodes)"}
+                {analysisDepth === "deep" &&
+                  "Comprehensive analysis with granular concepts and sub-themes (18-30 nodes)"}
+              </p>
+            </div>
+
+            <Button onClick={handleAnalyze} className="gap-2" disabled={analysisScope === "all" && !canAnalyzeAll}>
+              {analysisScope === "all" ? <FileStack className="h-4 w-4" /> : <Brain className="h-4 w-4" />}
+              {analysisScope === "all" ? "Start Study Analysis" : "Start Analysis"}
             </Button>
-            <p className="text-xs text-muted-foreground mt-4">
-              💡 Requires OpenAI API key configured in Vercel
-            </p>
           </div>
         )}
 
@@ -269,8 +453,14 @@ export function DocumentIntelligence({
           <div className="flex flex-col items-center justify-center h-[calc(100vh-120px)] p-8">
             <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
             <p className="text-sm text-muted-foreground">
-              Analyzing document with AI...
+              {analysisScope === "all" 
+                ? `Analyzing ${availableDocuments.length} documents with AI...`
+                : "Analyzing document with AI..."}
             </p>
+            <Badge variant="outline" className="mt-2">
+              {analysisDepth.charAt(0).toUpperCase() + analysisDepth.slice(1)}{" "}
+              mode
+            </Badge>
           </div>
         )}
 
@@ -298,9 +488,7 @@ export function DocumentIntelligence({
             <TabsContent value="summary" className="h-full m-0">
               <ScrollArea className="h-full px-6 py-4">
                 <div className="prose prose-sm dark:prose-invert max-w-none">
-                  <h3 className="text-lg font-semibold mb-4">
-                    Executive Summary
-                  </h3>
+                  <h3 className="text-lg font-semibold mb-4">Summary</h3>
                   <p className="text-sm leading-relaxed whitespace-pre-wrap">
                     {analysis.summary}
                   </p>
@@ -367,7 +555,9 @@ export function DocumentIntelligence({
                             key={idx}
                             className="border-l-4 border-primary pl-4 py-2"
                           >
-                            <p className="text-sm italic mb-2">"{quote.text}"</p>
+                            <p className="text-sm italic mb-2">
+                              "{quote.text}"
+                            </p>
                             <p className="text-xs text-muted-foreground">
                               💡 {quote.relevance}
                             </p>
@@ -388,7 +578,11 @@ export function DocumentIntelligence({
                       <CardContent>
                         <div className="flex flex-wrap gap-2">
                           {analysis.keyInsights.patterns.map((pattern, idx) => (
-                            <Badge key={idx} variant="secondary" className="px-3 py-1">
+                            <Badge
+                              key={idx}
+                              variant="secondary"
+                              className="px-3 py-1"
+                            >
                               {pattern}
                             </Badge>
                           ))}

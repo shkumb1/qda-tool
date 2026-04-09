@@ -68,6 +68,21 @@ const TOUR_STEPS: Step[] = [
     ),
   },
   {
+    target: '[data-tour="document-intelligence"]',
+    content: (
+      <div>
+        <h3 className="font-semibold mb-2">Document Intelligence 🤖</h3>
+        <p>
+          Use AI-powered analysis to automatically generate summaries, detect
+          themes, create mind maps, and extract insights from your documents.
+        </p>
+        <p className="text-sm text-muted-foreground mt-2">
+          Analyze individual documents or your entire study at once!
+        </p>
+      </div>
+    ),
+  },
+  {
     target: '[data-tour="help"]',
     content: (
       <div>
@@ -137,16 +152,7 @@ export function OnboardingTour() {
     return null;
   }
 
-  // Auto-show onboarding for new users after workspace creation
-  useEffect(() => {
-    const hasSeenTour = localStorage.getItem("hasSeenTour");
-    const activeWorkspaceId = useQDAStore.getState().activeWorkspaceId;
-
-    if (!hasSeenTour && activeWorkspaceId) {
-      setShowOnboarding(true);
-      localStorage.setItem("hasSeenTour", "true");
-    }
-  }, [setShowOnboarding]);
+  // No auto-show logic needed - triggered explicitly from WorkspaceSelector
 
   const handleJoyrideCallback = (data: CallBackProps) => {
     const { status } = data;

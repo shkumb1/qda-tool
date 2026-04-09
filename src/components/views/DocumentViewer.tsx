@@ -635,6 +635,7 @@ export function DocumentViewer() {
                   size="sm"
                   onClick={() => setIntelligenceOpen(true)}
                   className="gap-2"
+                  data-tour="document-intelligence"
                 >
                   <Brain className="h-4 w-4" />
                   Document Intelligence
