@@ -209,8 +209,15 @@ IMPORTANT: Return ONLY a valid JSON array, with no markdown formatting, no code 
 
     try {
       const suggestions = JSON.parse(cleanedResponse);
+      
+      // Handle case where AI returns a single object instead of an array
       if (!Array.isArray(suggestions)) {
-        throw new Error("AI response is not an array");
+        // If it's a valid suggestion object, wrap it in an array
+        if (suggestions && typeof suggestions === 'object' && suggestions.code) {
+          console.log("AI returned single object, wrapping in array");
+          return [suggestions];
+        }
+        throw new Error("AI response is not an array or valid suggestion object");
       }
       return suggestions;
     } catch (parseError) {
