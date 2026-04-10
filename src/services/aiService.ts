@@ -110,7 +110,11 @@ async function callOpenAI(
 
     const data = await response.json();
     console.log("OpenAI Response received successfully");
-    return data.choices[0].message.content;
+    const content = data.choices?.[0]?.message?.content;
+    if (!content) {
+      throw new Error("OpenAI returned empty response");
+    }
+    return content;
   } catch (error) {
     console.error("Fetch Error Details:", error);
 
@@ -192,6 +196,10 @@ IMPORTANT: Return ONLY a valid JSON array, with no markdown formatting, no code 
     );
 
     // Clean up response - remove markdown code blocks if present
+    if (!response || typeof response !== 'string') {
+      throw new Error("Invalid response from AI: response is null or not a string");
+    }
+    
     let cleanedResponse = response.trim();
     if (cleanedResponse.startsWith("```json")) {
       cleanedResponse = cleanedResponse
