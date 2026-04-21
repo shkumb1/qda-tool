@@ -60,7 +60,10 @@ async function parsePDF(file: File): Promise<string> {
 
     return textParts.join("\n\n");
   } catch (error) {
-    throw new Error("Failed to parse PDF file");
+    console.error("PDF parsing error:", error);
+    throw new Error(
+      `Failed to parse PDF file "${file.name}": ${error instanceof Error ? error.message : "Unknown error"}`
+    );
   }
 }
 
@@ -70,7 +73,10 @@ async function parseDOCX(file: File): Promise<string> {
     const result = await mammoth.extractRawText({ arrayBuffer });
     return result.value;
   } catch (error) {
-    throw new Error("Failed to parse DOCX file");
+    console.error("DOCX parsing error:", error);
+    throw new Error(
+      `Failed to parse DOCX file "${file.name}": ${error instanceof Error ? error.message : "Unknown error"}`
+    );
   }
 }
 
@@ -78,7 +84,8 @@ async function parseTXT(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result as string);
-    reader.onerror = () => reject(new Error("Failed to read text file"));
+    reader.onerror = () => 
+      reject(new Error(`Failed to read text file "${file.name}": ${reader.error?.message || "Unknown error"}`));
     reader.readAsText(file);
   });
 }

@@ -221,6 +221,7 @@ export function StudiesDashboard() {
     toast({
       title: "Study opened",
       description: "You can now work on this study.",
+      duration: 2000,
     });
   };
 

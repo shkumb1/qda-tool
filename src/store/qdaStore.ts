@@ -366,13 +366,16 @@ export const useQDAStore = create<QDAState>()(
         if (id) {
           const state = get();
           const workspace = state.workspaces.find((w) => w.id === id);
-          
-          // Restore the collaborator (use the creator or first collaborator)
-          const collaborator = workspace?.collaborators.find(
-            (c) => c.id === workspace.createdBy
-          ) || workspace?.collaborators[0] || null;
 
-          set({ 
+          // Restore the collaborator (use the creator or first collaborator)
+          const collaborator =
+            workspace?.collaborators.find(
+              (c) => c.id === workspace.createdBy,
+            ) ||
+            workspace?.collaborators[0] ||
+            null;
+
+          set({
             activeWorkspaceId: id,
             currentCollaborator: collaborator,
           });
@@ -847,10 +850,18 @@ export const useQDAStore = create<QDAState>()(
         const excerpt = get().excerpts.find((e) => e.id === id);
         if (!excerpt) return;
 
-        set((state) =>
-          updateActiveStudyData(state, {
-            excerpts: state.excerpts.filter((e) => e.id !== id),
-            codes: state.codes.map((code) => {
+        console.log(
+          "[STORE] Removing entire excerpt:",
+          id,
+          "with codes:",
+          excerpt.codeIds,
+        );
+
+        set((state) => {
+          // Update codes and track which ones will be deleted
+          const codesToDelete: string[] = [];
+          const updatedCodes = state.codes
+            .map((code) => {
               if (excerpt.codeIds.includes(code.id)) {
                 const newExcerptIds = code.excerptIds.filter(
                   (eid) => eid !== id,
@@ -868,9 +879,37 @@ export const useQDAStore = create<QDAState>()(
                 };
               }
               return code;
-            }),
-          }),
+            })
+            .filter((code) => {
+              // Auto-delete codes with 0 frequency
+              if (code.frequency === 0) {
+                console.log("[STORE] 🗑️ Auto-deleting unused code:", code.name);
+                codesToDelete.push(code.id);
+                return false;
+              }
+              return true;
+            });
+
+          // Remove deleted codes from themes
+          const updatedThemes = state.themes.map((theme) => ({
+            ...theme,
+            codeIds: theme.codeIds.filter(
+              (cid) => !codesToDelete.includes(cid),
+            ),
+          }));
+
+          return updateActiveStudyData(state, {
+            excerpts: state.excerpts.filter((e) => e.id !== id),
+            codes: updatedCodes,
+            themes: updatedThemes,
+          });
+        });
+
+        console.log(
+          "[STORE] ✅ Excerpt removed. Remaining excerpts:",
+          get().excerpts.length,
         );
+        console.log("[STORE] ✅ Remaining codes:", get().codes.length);
       },
 
       assignCodeToExcerpt: (excerptId, codeId) => {
@@ -910,7 +949,25 @@ export const useQDAStore = create<QDAState>()(
 
       removeCodeFromExcerpt: (excerptId, codeId) => {
         if (!get().activeStudyId) return;
+
+        console.log("[STORE] Removing code from excerpt:", {
+          excerptId,
+          codeId,
+        });
+
         set((state) => {
+          const excerpt = state.excerpts.find((e) => e.id === excerptId);
+          const code = state.codes.find((c) => c.id === codeId);
+
+          console.log(
+            "[STORE] Before removal - Excerpt codeIds:",
+            excerpt?.codeIds,
+          );
+          console.log(
+            "[STORE] Before removal - Code excerptIds:",
+            code?.excerptIds,
+          );
+
           const updatedExcerpts = state.excerpts.map((e) =>
             e.id === excerptId
               ? { ...e, codeIds: e.codeIds.filter((id) => id !== codeId) }
@@ -927,27 +984,73 @@ export const useQDAStore = create<QDAState>()(
                   .filter((e) => newExcerptIds.includes(e.id))
                   .map((e) => e.documentId),
               );
-              return {
+              const updatedCode = {
                 ...code,
                 excerptIds: newExcerptIds,
                 frequency: newExcerptIds.length,
                 documentCount: docIds.size,
               };
+
+              console.log("[STORE] After removal - Updated code:", updatedCode);
+
+              return updatedCode;
             }
             return code;
           });
 
+          const updatedExcerpt = updatedExcerpts.find(
+            (e) => e.id === excerptId,
+          );
+          console.log(
+            "[STORE] After removal - Updated excerpt codeIds:",
+            updatedExcerpt?.codeIds,
+          );
+
+          // Auto-delete codes with 0 frequency and track which ones
+          const codesToDelete: string[] = [];
+          const finalCodes = updatedCodes.filter((code) => {
+            if (code.frequency === 0) {
+              console.log("[STORE] 🗑️ Auto-deleting unused code:", code.name);
+              codesToDelete.push(code.id);
+              return false;
+            }
+            return true;
+          });
+
+          // Remove deleted codes from themes
+          const updatedThemes = state.themes.map((theme) => ({
+            ...theme,
+            codeIds: theme.codeIds.filter(
+              (cid) => !codesToDelete.includes(cid),
+            ),
+          }));
+
           return updateActiveStudyData(state, {
             excerpts: updatedExcerpts,
-            codes: updatedCodes,
+            codes: finalCodes,
+            themes: updatedThemes,
           });
         });
+
+        // Log state after update
+        const newState = get();
+        const finalExcerpt = newState.excerpts.find((e) => e.id === excerptId);
+        const finalCode = newState.codes.find((c) => c.id === codeId);
+        console.log(
+          "[STORE] ✅ State updated. Final excerpt codeIds:",
+          finalExcerpt?.codeIds,
+        );
+        console.log(
+          "[STORE] ✅ State updated. Final code frequency:",
+          finalCode?.frequency || "DELETED",
+        );
+        console.log("[STORE] ✅ Remaining codes:", newState.codes.length);
       },
 
       // Theme actions
       addTheme: (name, color, parentId) => {
         if (!get().activeStudyId) return {} as Theme;
-        
+
         // Determine level based on parent
         let level: "main" | "theme" | "subtheme" = "main";
         if (parentId) {
@@ -960,7 +1063,7 @@ export const useQDAStore = create<QDAState>()(
             }
           }
         }
-        
+
         const newTheme: Theme = {
           id: uuidv4(),
           name,
@@ -992,7 +1095,7 @@ export const useQDAStore = create<QDAState>()(
 
       deleteTheme: (id) => {
         if (!get().activeStudyId) return;
-        
+
         // Recursively delete child themes
         const getAllChildThemeIds = (themeId: string): string[] => {
           const children = get().themes.filter((t) => t.parentId === themeId);
@@ -1000,12 +1103,14 @@ export const useQDAStore = create<QDAState>()(
           const grandchildIds = childIds.flatMap(getAllChildThemeIds);
           return [themeId, ...childIds, ...grandchildIds];
         };
-        
+
         const themeIdsToDelete = getAllChildThemeIds(id);
-        
+
         set((state) =>
           updateActiveStudyData(state, {
-            themes: state.themes.filter((t) => !themeIdsToDelete.includes(t.id)),
+            themes: state.themes.filter(
+              (t) => !themeIdsToDelete.includes(t.id),
+            ),
           }),
         );
       },
@@ -1179,32 +1284,47 @@ export const useQDAStore = create<QDAState>()(
         const codesWithDesc = state.codes.filter(
           (c) => c.description && c.description.length > 0,
         ).length;
-        
+
         // Code precision rate (percentage of codes with descriptions)
-        const codePrecisionRate = totalCodes > 0 
-          ? ((codesWithDesc / totalCodes) * 100).toFixed(1) 
-          : "0";
-        
+        const codePrecisionRate =
+          totalCodes > 0
+            ? ((codesWithDesc / totalCodes) * 100).toFixed(1)
+            : "0";
+
         // Average codes per theme
-        const avgCodesPerTheme = totalThemes > 0
-          ? (state.themes.reduce((sum, t) => sum + t.codeIds.length, 0) / totalThemes).toFixed(1)
-          : "0";
-        
+        const avgCodesPerTheme =
+          totalThemes > 0
+            ? (
+                state.themes.reduce((sum, t) => sum + t.codeIds.length, 0) /
+                totalThemes
+              ).toFixed(1)
+            : "0";
+
         const avgExcerptLength =
           totalExcerpts > 0
-            ? (state.excerpts.reduce((sum, e) => sum + e.text.length, 0) / totalExcerpts).toFixed(0)
+            ? (
+                state.excerpts.reduce((sum, e) => sum + e.text.length, 0) /
+                totalExcerpts
+              ).toFixed(0)
             : "0";
         const multiCodedExcerpts = state.excerpts.filter(
           (e) => e.codeIds.length > 1,
         ).length;
-        
+
         // Coverage rate: percentage of document text that has been coded
-        const totalDocChars = state.documents.reduce((sum, d) => sum + d.content.length, 0);
-        const codedChars = state.excerpts.reduce((sum, e) => sum + e.text.length, 0);
-        const coverageRate = totalDocChars > 0
-          ? ((codedChars / totalDocChars) * 100).toFixed(1)
-          : "0";
-        
+        const totalDocChars = state.documents.reduce(
+          (sum, d) => sum + d.content.length,
+          0,
+        );
+        const codedChars = state.excerpts.reduce(
+          (sum, e) => sum + e.text.length,
+          0,
+        );
+        const coverageRate =
+          totalDocChars > 0
+            ? ((codedChars / totalDocChars) * 100).toFixed(1)
+            : "0";
+
         const memosWritten = state.memos.length;
 
         // Session duration (optional - for background tracking only)
@@ -1602,21 +1722,29 @@ export const useQDAStore = create<QDAState>()(
             themes: study.themes.map((theme) => ({
               ...theme,
               // Set default level to "main" if not present, or determine from parent
-              level: (theme as any).level || 
-                (theme.parentId 
-                  ? (study.themes.find((t) => t.id === theme.parentId) as any)?.level === "main"
+              level:
+                (theme as any).level ||
+                ((theme.parentId
+                  ? (study.themes.find((t) => t.id === theme.parentId) as any)
+                      ?.level === "main"
                     ? "theme"
                     : "subtheme"
-                  : "main") as "main" | "theme" | "subtheme",
+                  : "main") as "main" | "theme" | "subtheme"),
             })),
           }));
-          
+
           state.studies = migratedStudies;
-          
-          // Sync active study data
-          const activeStudy = migratedStudies.find((s) => s.id === state.activeStudyId);
+
+          // Sync active study data - load ALL data from the active study
+          const activeStudy = migratedStudies.find(
+            (s) => s.id === state.activeStudyId,
+          );
           if (activeStudy) {
+            state.documents = activeStudy.documents;
+            state.codes = activeStudy.codes;
             state.themes = activeStudy.themes;
+            state.excerpts = activeStudy.excerpts;
+            state.memos = activeStudy.memos;
           }
         }
       },

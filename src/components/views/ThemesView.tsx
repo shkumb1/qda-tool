@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useQDAStore } from "@/store/qdaStore";
 import { suggestThemes, type AIThemeSuggestion } from "@/services/aiService";
 import {
@@ -15,6 +15,8 @@ import {
   Copy,
   MoreVertical,
   Check,
+  MoveDown,
+  MoveUp,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -94,8 +96,20 @@ export function ThemesView() {
   const [themeColor, setThemeColor] = useState(THEME_COLORS[0]);
   const [themeMemo, setThemeMemo] = useState("");
   const [draggedCode, setDraggedCode] = useState<Code | null>(null);
+  const [dragSourceThemeId, setDragSourceThemeId] = useState<string | null>(
+    null,
+  ); // null = from sidebar
   const [dropTargetTheme, setDropTargetTheme] = useState<string | null>(null);
-  const [isDragCopy, setIsDragCopy] = useState(false);
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    code: Code;
+  } | null>(null);
+  // Track which code+theme pairs came from dragging (not copying)
+  // Key format: "codeId::themeId"
+  const [draggedAssignments, setDraggedAssignments] = useState<Set<string>>(
+    new Set(),
+  );
   const [aiSuggestions, setAiSuggestions] = useState<AIThemeSuggestion[]>([]);
   const [loadingAI, setLoadingAI] = useState(false);
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
@@ -103,11 +117,33 @@ export function ThemesView() {
     open: boolean;
     parentTheme: Theme | null;
   }>({ open: false, parentTheme: null });
+  const [themeSearchQuery, setThemeSearchQuery] = useState("");
+  const themeSearchInputRef = useRef<HTMLInputElement>(null);
+  
+  // Theme dragging state (separate from code dragging)
+  const [draggedTheme, setDraggedTheme] = useState<Theme | null>(null);
+  const [themeDropTarget, setThemeDropTarget] = useState<{
+    themeId: string;
+    action: "nest" | "main";
+  } | null>(null);
 
-  // Codes not assigned to any theme
-  const unassignedCodes = codes.filter(
-    (code) => !themes.some((theme) => theme.codeIds.includes(code.id)),
-  );
+  // Show all codes in sidebar except ones that have ANY drag-based assignments
+  // (codes that were right-click copied to themes still appear here)
+  const sidebarCodes = codes.filter((code) => {
+    // Check if this code has any drag-based assignments to any theme
+    const hasDragAssignment = themes.some((theme) =>
+      draggedAssignments.has(`${code.id}::${theme.id}`),
+    );
+    return !hasDragAssignment;
+  });
+
+  // Filter themes by search query (for context menu)
+  const filteredThemes = useMemo(() => {
+    if (!themeSearchQuery.trim()) return themes;
+
+    const query = themeSearchQuery.toLowerCase();
+    return themes.filter((theme) => theme.name.toLowerCase().includes(query));
+  }, [themes, themeSearchQuery]);
 
   // Get main themes (no parent)
   const mainThemes = themes.filter((t) => !t.parentId);
@@ -125,6 +161,31 @@ export function ThemesView() {
       newExpanded.add(themeId);
     }
     setExpandedThemes(newExpanded);
+  };
+
+  // Close context menu on click
+  useEffect(() => {
+    const handleClick = () => setContextMenu(null);
+    if (contextMenu) {
+      // Auto-focus search input and clear previous search
+      setThemeSearchQuery("");
+      setTimeout(() => {
+        themeSearchInputRef.current?.focus();
+      }, 0);
+      window.addEventListener("click", handleClick);
+      return () => window.removeEventListener("click", handleClick);
+    }
+  }, [contextMenu]);
+
+  const handleCopyToTheme = (code: Code, themeId: string) => {
+    // Copy: just add to theme, code stays in sidebar
+    addCodeToTheme(themeId, code.id);
+    toast({
+      title: "Code copied to theme",
+      description: `"${code.name}" can still be copied to other themes`,
+      duration: 2000,
+    });
+    setContextMenu(null);
   };
 
   const handleGetAISuggestions = async () => {
@@ -217,13 +278,13 @@ export function ThemesView() {
     toast({ title: "Theme updated" });
   };
 
-  const handleDragStart = (code: Code) => {
+  const handleDragStart = (code: Code, sourceThemeId: string | null = null) => {
+    console.log("[DRAG START]", {
+      code: code.name,
+      sourceThemeId: sourceThemeId || "SIDEBAR",
+    });
     setDraggedCode(code);
-  };
-
-  const handleDrag = (e: React.DragEvent) => {
-    // Check if Ctrl key is pressed during drag
-    setIsDragCopy(e.ctrlKey || e.metaKey);
+    setDragSourceThemeId(sourceThemeId); // null means dragging from sidebar
   };
 
   const handleDragOver = (e: React.DragEvent, themeId: string) => {
@@ -239,29 +300,38 @@ export function ThemesView() {
     e.preventDefault();
     if (!draggedCode) return;
 
-    const sourceTheme = themes.find((t) => t.codeIds.includes(draggedCode.id));
-    const isCopyOperation = e.ctrlKey || e.metaKey;
+    console.log("[DRAG DROP]", {
+      code: draggedCode.name,
+      sourceThemeId: dragSourceThemeId || "SIDEBAR",
+      targetThemeId,
+    });
 
-    if (isCopyOperation) {
-      // Copy: Just add to target theme, keep in source
-      addCodeToTheme(targetThemeId, draggedCode.id);
-      toast({
-        title: "Code copied to theme",
-        description: `"${draggedCode.name}" now appears in multiple themes.`,
+    if (dragSourceThemeId !== null && dragSourceThemeId !== undefined) {
+      // Dragging FROM a theme TO another theme = MOVE
+      console.log("→ Moving code between themes");
+      moveCodeBetweenThemes(draggedCode.id, dragSourceThemeId, targetThemeId);
+      // Update dragged assignment tracking: remove old, add new
+      setDraggedAssignments((prev) => {
+        const newSet = new Set(prev);
+        newSet.delete(`${draggedCode.id}::${dragSourceThemeId}`);
+        newSet.add(`${draggedCode.id}::${targetThemeId}`);
+        return newSet;
       });
+      toast({ title: "Code moved between themes", duration: 2000 });
     } else {
-      // Move: Remove from source, add to target
-      if (sourceTheme) {
-        moveCodeBetweenThemes(draggedCode.id, sourceTheme.id, targetThemeId);
-      } else {
-        addCodeToTheme(targetThemeId, draggedCode.id);
-      }
-      toast({ title: "Code moved to theme" });
+      // Dragging FROM sidebar = just ADD (don't remove from anywhere)
+      console.log("→ Adding code from sidebar to theme");
+      addCodeToTheme(targetThemeId, draggedCode.id);
+      // Mark this specific code+theme pair as a dragged assignment
+      setDraggedAssignments((prev) =>
+        new Set(prev).add(`${draggedCode.id}::${targetThemeId}`),
+      );
+      toast({ title: "Code added to theme", duration: 2000 });
     }
 
     setDraggedCode(null);
+    setDragSourceThemeId(null);
     setDropTargetTheme(null);
-    setIsDragCopy(false);
   };
 
   const getCodeThemes = (codeId: string) => {
@@ -273,20 +343,159 @@ export function ThemesView() {
     if (!theme) return;
 
     if (theme.codeIds.includes(codeId)) {
+      // Check if code exists in other themes BEFORE removing
+      const otherThemesWithCode = themes.filter(
+        (t) => t.id !== themeId && t.codeIds.includes(codeId),
+      );
+      const isInOtherThemes = otherThemesWithCode.length > 0;
+
+      // Check if this specific code+theme assignment came from dragging
+      const wasDragged = draggedAssignments.has(`${codeId}::${themeId}`);
+
+      console.log("[TOGGLE REMOVE]", {
+        code: codeId,
+        fromTheme: themeId,
+        wasDragged,
+        inOtherThemes: isInOtherThemes,
+        otherThemes: otherThemesWithCode.map((t) => t.name),
+      });
+
       removeCodeFromTheme(themeId, codeId);
-      toast({ title: "Code removed from theme" });
+
+      if (wasDragged) {
+        // Remove this drag assignment
+        setDraggedAssignments((prev) => {
+          const newSet = new Set(prev);
+          newSet.delete(`${codeId}::${themeId}`);
+
+          // Check if code has any OTHER drag assignments
+          const hasOtherDragAssignments = themes.some(
+            (t) => t.id !== themeId && newSet.has(`${codeId}::${t.id}`),
+          );
+
+          console.log("→ Drag assignment removed", {
+            hasOtherDragAssignments,
+            willReturnToSidebar: !hasOtherDragAssignments,
+          });
+
+          return newSet;
+        });
+      }
+
+      toast({ title: "Code removed from theme", duration: 2000 });
     } else {
       addCodeToTheme(themeId, codeId);
-      toast({ title: "Code added to theme" });
+      toast({ title: "Code added to theme", duration: 2000 });
     }
+  };
+
+  // Theme dragging handlers
+  const handleThemeDragStart = (theme: Theme) => {
+    setDraggedTheme(theme);
+    console.log("[THEME DRAG START]", { theme: theme.name, level: theme.level });
+  };
+
+  const handleThemeDragOver = (
+    e: React.DragEvent,
+    targetTheme: Theme,
+    area: "header" | "main-area",
+  ) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (!draggedTheme) return;
+    
+    // Prevent dropping on itself
+    if (draggedTheme.id === targetTheme.id) return;
+    
+    // Prevent circular nesting (can't nest parent under its own child/grandchild)
+    const isDescendant = (potentialParent: Theme, potentialChild: Theme): boolean => {
+      if (potentialParent.parentId === potentialChild.id) return true;
+      const parent = themes.find((t) => t.id === potentialParent.parentId);
+      return parent ? isDescendant(parent, potentialChild) : false;
+    };
+    
+    if (isDescendant(targetTheme, draggedTheme)) {
+      console.log("⚠️ Cannot nest parent under child");
+      return;
+    }
+    
+    // Determine action based on target and area
+    if (area === "header") {
+      // Dropping ON a theme header = nest as subtheme
+      if (targetTheme.level === "subtheme") {
+        // Can't nest under subtheme (max 3 levels)
+        return;
+      }
+      setThemeDropTarget({ themeId: targetTheme.id, action: "nest" });
+    } else {
+      // Dropping in main area = make main theme
+      setThemeDropTarget({ themeId: "main-area", action: "main" });
+    }
+  };
+
+  const handleThemeDragLeave = () => {
+    setThemeDropTarget(null);
+  };
+
+  const handleThemeDrop = (
+    e: React.DragEvent,
+    targetTheme?: Theme,
+  ) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (!draggedTheme || !themeDropTarget) return;
+    
+    if (themeDropTarget.action === "nest" && targetTheme) {
+      // Nest under target theme
+      const newLevel: Theme["level"] =
+        targetTheme.level === "main" ? "theme" : "subtheme";
+      
+      updateTheme(draggedTheme.id, {
+        parentId: targetTheme.id,
+        level: newLevel,
+      });
+      
+      console.log("[THEME NESTED]", {
+        theme: draggedTheme.name,
+        under: targetTheme.name,
+        newLevel,
+      });
+      
+      toast({
+        title: "Theme reorganized",
+        description: `"${draggedTheme.name}" is now under "${targetTheme.name}"`,
+        duration: 2000,
+      });
+    } else if (themeDropTarget.action === "main") {
+      // Make it a main theme
+      updateTheme(draggedTheme.id, {
+        parentId: null,
+        level: "main",
+      });
+      
+      console.log("[THEME TO MAIN]", { theme: draggedTheme.name });
+      
+      toast({
+        title: "Theme promoted",
+        description: `"${draggedTheme.name}" is now a main theme`,
+        duration: 2000,
+      });
+    }
+    
+    setDraggedTheme(null);
+    setThemeDropTarget(null);
   };
 
   const renderThemeCard = (theme: Theme, depth: number = 0) => {
     const themeCodes = codes.filter((c) => theme.codeIds.includes(c.id));
     const childThemes = getChildThemes(theme.id);
     const isExpanded = expandedThemes.has(theme.id);
-    const isDropTarget = dropTargetTheme === theme.id;
+    const isCodeDropTarget = dropTargetTheme === theme.id; // For code drops
+    const isThemeDropTarget = themeDropTarget?.themeId === theme.id; // For theme drops
     const canAddChild = theme.level !== "subtheme"; // Only main and theme can have children
+    const isDragging = draggedTheme?.id === theme.id;
 
     const levelStyles = {
       main: "border-l-4 border-l-blue-500",
@@ -305,65 +514,124 @@ export function ThemesView() {
         <div
           className={cn(
             "rounded-lg border bg-card transition-all relative",
-            isDropTarget ? "border-accent border-2 shadow-lg" : "border-border",
+            isCodeDropTarget && "border-accent border-2 shadow-lg",
+            isThemeDropTarget && "border-primary border-2 shadow-lg ring-2 ring-primary/20",
+            isDragging && "opacity-50",
             levelStyles[theme.level],
           )}
-          onDragOver={(e) => handleDragOver(e, theme.id)}
-          onDragLeave={handleDragLeave}
-          onDrop={(e) => handleDrop(e, theme.id)}
+          onDragOver={(e) => {
+            // Handle both code and theme drops
+            if (draggedCode) {
+              handleDragOver(e, theme.id);
+            } else if (draggedTheme) {
+              handleThemeDragOver(e, theme, "header");
+            }
+          }}
+          onDragLeave={() => {
+            handleDragLeave();
+            handleThemeDragLeave();
+          }}
+          onDrop={(e) => {
+            if (draggedCode) {
+              handleDrop(e, theme.id);
+            } else if (draggedTheme) {
+              handleThemeDrop(e, theme);
+            }
+          }}
         >
-        {/* Copy Mode Indicator */}
-        {isDropTarget && isDragCopy && (
-          <div className="absolute inset-0 bg-accent/5 rounded-lg pointer-events-none flex items-center justify-center z-10">
-            <div className="bg-accent text-accent-foreground px-3 py-1.5 rounded-full shadow-lg flex items-center gap-2">
-              <Copy className="h-4 w-4" />
-              <span className="text-sm font-medium">Copy to theme</span>
+          {/* Code Drop Indicator */}
+          {isCodeDropTarget && (
+            <div className="absolute inset-0 bg-accent/5 rounded-lg pointer-events-none flex items-center justify-center z-10">
+              <div className="bg-accent text-accent-foreground px-3 py-1.5 rounded-full shadow-lg flex items-center gap-2">
+                <Plus className="h-4 w-4" />
+                <span className="text-sm font-medium">Drop code to add</span>
+              </div>
             </div>
-          </div>
-        )}
+          )}
+          
+          {/* Theme Drop Indicator */}
+          {isThemeDropTarget && themeDropTarget?.action === "nest" && (
+            <div className="absolute inset-0 bg-primary/5 rounded-lg pointer-events-none flex items-center justify-center z-10">
+              <div className="bg-primary text-primary-foreground px-3 py-1.5 rounded-full shadow-lg flex items-center gap-2">
+                <MoveDown className="h-4 w-4" />
+                <span className="text-sm font-medium">
+                  Nest as {theme.level === "main" ? "theme" : "sub-theme"}
+                </span>
+              </div>
+            </div>
+          )}
 
-        {/* Header */}
-        <div
-          className="flex items-center gap-3 p-4 cursor-pointer hover:bg-muted/30 transition-colors"
-          onClick={() => toggleExpand(theme.id)}
-        >
-          <button className="p-0.5">
-            {isExpanded ? (
-              <ChevronDown className="h-4 w-4 text-muted-foreground" />
-            ) : (
-              <ChevronRight className="h-4 w-4 text-muted-foreground" />
-            )}
-          </button>
-
+          {/* Header */}
           <div
-            className="w-4 h-4 rounded-full flex-shrink-0"
-            style={{ backgroundColor: theme.color }}
-          />
+            draggable
+            onDragStart={() => handleThemeDragStart(theme)}
+            className="flex items-center gap-3 p-4 cursor-grab active:cursor-grabbing hover:bg-muted/30 transition-colors"
+            onClick={() => toggleExpand(theme.id)}
+          >
+            <GripVertical className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+            <button className="p-0.5">
+              {isExpanded ? (
+                <ChevronDown className="h-4 w-4 text-muted-foreground" />
+              ) : (
+                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+              )}
+            </button>
 
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <h3 className="font-semibold text-foreground truncate">
-                {theme.name}
-              </h3>
-              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted font-medium text-muted-foreground uppercase">
-                {levelLabels[theme.level]}
-              </span>
+            <div
+              className="w-4 h-4 rounded-full flex-shrink-0"
+              style={{ backgroundColor: theme.color }}
+            />
+
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <h3 className="font-semibold text-foreground truncate">
+                  {theme.name}
+                </h3>
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted font-medium text-muted-foreground uppercase">
+                  {levelLabels[theme.level]}
+                </span>
+              </div>
+              {theme.description && (
+                <p className="text-xs text-muted-foreground truncate">
+                  {theme.description}
+                </p>
+              )}
             </div>
-            {theme.description && (
-              <p className="text-xs text-muted-foreground truncate">
-                {theme.description}
-              </p>
-            )}
-          </div>
 
-          <span className="text-sm text-muted-foreground">
-            {themeCodes.length} codes
-            {childThemes.length > 0 && ` • ${childThemes.length} sub`}
-          </span>
+            <span className="text-sm text-muted-foreground">
+              {themeCodes.length} codes
+              {childThemes.length > 0 && ` • ${childThemes.length} sub`}
+            </span>
 
-          {/* Actions */}
-          <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
-            {canAddChild && (
+            {/* Actions */}
+            <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+              {canAddChild && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={() => {
+                        setThemeName("");
+                        setThemeDescription("");
+                        setThemeColor(
+                          THEME_COLORS[themes.length % THEME_COLORS.length],
+                        );
+                        setAddSubThemeDialog({
+                          open: true,
+                          parentTheme: theme,
+                        });
+                      }}
+                    >
+                      <Plus className="h-3 w-3" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    Add sub-{theme.level === "main" ? "theme" : "theme"}
+                  </TooltipContent>
+                </Tooltip>
+              )}
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
@@ -371,212 +639,221 @@ export function ThemesView() {
                     size="icon"
                     className="h-7 w-7"
                     onClick={() => {
-                      setThemeName("");
-                      setThemeDescription("");
-                      setThemeColor(THEME_COLORS[themes.length % THEME_COLORS.length]);
-                      setAddSubThemeDialog({ open: true, parentTheme: theme });
+                      setThemeName(theme.name);
+                      setThemeDescription(theme.description || "");
+                      setThemeColor(theme.color);
+                      setThemeMemo(theme.memo || "");
+                      setEditThemeDialog({ open: true, theme });
                     }}
                   >
-                    <Plus className="h-3 w-3" />
+                    <Edit2 className="h-3 w-3" />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent>Add sub-{theme.level === "main" ? "theme" : "theme"}</TooltipContent>
+                <TooltipContent>Edit theme</TooltipContent>
               </Tooltip>
-            )}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7"
-                  onClick={() => {
-                    setThemeName(theme.name);
-                    setThemeDescription(theme.description || "");
-                    setThemeColor(theme.color);
-                    setThemeMemo(theme.memo || "");
-                    setEditThemeDialog({ open: true, theme });
-                  }}
-                >
-                  <Edit2 className="h-3 w-3" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Edit theme</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7 text-destructive hover:text-destructive"
-                  onClick={() => {
-                    deleteTheme(theme.id);
-                    toast({ title: "Theme deleted" });
-                  }}
-                >
-                  <Trash2 className="h-3 w-3" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Delete theme</TooltipContent>
-            </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-destructive hover:text-destructive"
+                    onClick={() => {
+                      deleteTheme(theme.id);
+                      toast({ title: "Theme deleted" });
+                    }}
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Delete theme</TooltipContent>
+              </Tooltip>
+            </div>
           </div>
+
+          {/* Codes */}
+          {isExpanded && (
+            <div className="px-4 pb-4 border-t border-border pt-3">
+              {themeCodes.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {themeCodes.map((code) => {
+                    const codeThemes = getCodeThemes(code.id);
+                    return (
+                      <Tooltip key={code.id}>
+                        <TooltipTrigger asChild>
+                          <div
+                            draggable
+                            onDragStart={() => handleDragStart(code, theme.id)}
+                            onContextMenu={(e) => {
+                              e.preventDefault();
+                              setContextMenu({
+                                x: e.clientX,
+                                y: e.clientY,
+                                code,
+                              });
+                            }}
+                            className={cn(
+                              "group relative flex items-center gap-2 px-2.5 py-1.5 rounded-md bg-muted/50 cursor-grab active:cursor-grabbing hover:bg-muted transition-colors",
+                              code.level === "main" &&
+                                "border-l-2 border-code-main",
+                              code.level === "child" &&
+                                "border-l-2 border-code-child",
+                              code.level === "subchild" &&
+                                "border-l-2 border-code-subchild",
+                            )}
+                          >
+                            <GripVertical className="h-3 w-3 text-muted-foreground" />
+                            <span className="text-sm">{code.name}</span>
+                            <span className="text-xs text-muted-foreground">
+                              ({code.frequency})
+                            </span>
+                            {codeThemes.length > 1 && (
+                              <span className="text-xs bg-accent/20 text-accent px-1.5 py-0.5 rounded-full font-medium">
+                                {codeThemes.length} themes
+                              </span>
+                            )}
+                            <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <button
+                                    className="text-muted-foreground hover:text-foreground"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <MoreVertical className="h-3 w-3" />
+                                  </button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuLabel>
+                                    Assign to Themes
+                                  </DropdownMenuLabel>
+                                  <DropdownMenuSeparator />
+                                  {themes.map((t) => (
+                                    <DropdownMenuCheckboxItem
+                                      key={t.id}
+                                      checked={t.codeIds.includes(code.id)}
+                                      onCheckedChange={() =>
+                                        toggleCodeInTheme(code.id, t.id)
+                                      }
+                                    >
+                                      <div className="flex items-center gap-2">
+                                        <div
+                                          className="w-3 h-3 rounded-full"
+                                          style={{ backgroundColor: t.color }}
+                                        />
+                                        <span>{t.name}</span>
+                                      </div>
+                                    </DropdownMenuCheckboxItem>
+                                  ))}
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                              <button
+                                className="text-destructive hover:text-destructive/80"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+
+                                  // Check if code exists in other themes BEFORE removing
+                                  const otherThemesWithCode = themes.filter(
+                                    (t) =>
+                                      t.id !== theme.id &&
+                                      t.codeIds.includes(code.id),
+                                  );
+                                  const isInOtherThemes =
+                                    otherThemesWithCode.length > 0;
+
+                                  // Check if this specific code+theme assignment came from dragging
+                                  const wasDragged = draggedAssignments.has(
+                                    `${code.id}::${theme.id}`,
+                                  );
+
+                                  console.log("[TRASH REMOVE]", {
+                                    code: code.name,
+                                    fromTheme: theme.name,
+                                    wasDragged,
+                                    inOtherThemes: isInOtherThemes,
+                                    otherThemes: otherThemesWithCode.map(
+                                      (t) => t.name,
+                                    ),
+                                  });
+
+                                  removeCodeFromTheme(theme.id, code.id);
+
+                                  if (wasDragged) {
+                                    // Remove this drag assignment
+                                    setDraggedAssignments((prev) => {
+                                      const newSet = new Set(prev);
+                                      newSet.delete(`${code.id}::${theme.id}`);
+
+                                      // Check if code has any OTHER drag assignments
+                                      const hasOtherDragAssignments =
+                                        themes.some(
+                                          (t) =>
+                                            t.id !== theme.id &&
+                                            newSet.has(`${code.id}::${t.id}`),
+                                        );
+
+                                      console.log("→ Drag assignment removed", {
+                                        hasOtherDragAssignments,
+                                        willReturnToSidebar:
+                                          !hasOtherDragAssignments,
+                                      });
+
+                                      return newSet;
+                                    });
+                                  }
+
+                                  toast({
+                                    title: "Code removed from theme",
+                                    duration: 2000,
+                                  });
+                                }}
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </button>
+                            </div>
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <div>
+                            <p>
+                              {code.frequency} excerpts in {code.documentCount}{" "}
+                              documents
+                            </p>
+                            {codeThemes.length > 1 && (
+                              <p className="text-xs text-muted-foreground mt-1">
+                                Also in:{" "}
+                                {codeThemes
+                                  .filter((t) => t.id !== theme.id)
+                                  .map((t) => t.name)
+                                  .join(", ")}
+                              </p>
+                            )}
+                            <p className="text-xs text-accent mt-1">
+                              💡 Drag to move • Right-click to copy
+                            </p>
+                          </div>
+                        </TooltipContent>
+                      </Tooltip>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  Drag or right-click codes to add them to this theme
+                </p>
+              )}
+            </div>
+          )}
         </div>
 
-        {/* Codes */}
-        {isExpanded && (
-          <div className="px-4 pb-4 border-t border-border pt-3">
-            {themeCodes.length > 0 ? (
-              <div className="flex flex-wrap gap-2">
-                {themeCodes.map((code) => {
-                  const codeThemes = getCodeThemes(code.id);
-                  return (
-                    <Tooltip key={code.id}>
-                      <TooltipTrigger asChild>
-                        <div
-                          draggable
-                          onDragStart={() => handleDragStart(code)}
-                          onDrag={handleDrag}
-                          className={cn(
-                            "group relative flex items-center gap-2 px-2.5 py-1.5 rounded-md bg-muted/50 cursor-grab active:cursor-grabbing hover:bg-muted transition-colors",
-                            code.level === "main" &&
-                              "border-l-2 border-code-main",
-                            code.level === "child" &&
-                              "border-l-2 border-code-child",
-                            code.level === "subchild" &&
-                              "border-l-2 border-code-subchild",
-                          )}
-                        >
-                          <GripVertical className="h-3 w-3 text-muted-foreground" />
-                          <span className="text-sm">{code.name}</span>
-                          <span className="text-xs text-muted-foreground">
-                            ({code.frequency})
-                          </span>
-                          {codeThemes.length > 1 && (
-                            <span className="text-xs bg-accent/20 text-accent px-1.5 py-0.5 rounded-full font-medium">
-                              {codeThemes.length} themes
-                            </span>
-                          )}
-                          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <button
-                                  className="text-muted-foreground hover:text-foreground"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  <MoreVertical className="h-3 w-3" />
-                                </button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuLabel>
-                                  Assign to Themes
-                                </DropdownMenuLabel>
-                                <DropdownMenuSeparator />
-                                {themes.map((t) => (
-                                  <DropdownMenuCheckboxItem
-                                    key={t.id}
-                                    checked={t.codeIds.includes(code.id)}
-                                    onCheckedChange={() =>
-                                      toggleCodeInTheme(code.id, t.id)
-                                    }
-                                  >
-                                    <div className="flex items-center gap-2">
-                                      <div
-                                        className="w-3 h-3 rounded-full"
-                                        style={{ backgroundColor: t.color }}
-                                      />
-                                      <span>{t.name}</span>
-                                    </div>
-                                  </DropdownMenuCheckboxItem>
-                                ))}
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                            <button
-                              className="text-destructive hover:text-destructive/80"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                removeCodeFromTheme(theme.id, code.id);
-                                toast({ title: "Code removed from theme" });
-                              }}
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </button>
-                          </div>
-                        </div>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <div>
-                          <p>
-                            {code.frequency} excerpts in {code.documentCount}{" "}
-                            documents
-                          </p>
-                          {codeThemes.length > 1 && (
-                            <p className="text-xs text-muted-foreground mt-1">
-                              Also in:{" "}
-                              {codeThemes
-                                .filter((t) => t.id !== theme.id)
-                                .map((t) => t.name)
-                                .join(", ")}
-                            </p>
-                          )}
-                          <p className="text-xs text-accent mt-1">
-                            💡 Hold Ctrl to copy, drag normally to move
-                          </p>
-                        </div>
-                      </TooltipContent>
-                    </Tooltip>
-                  );
-                })}
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground text-center py-4">
-                Drag codes here to add them to this theme
-                <br />
-                <span className="text-xs">
-                  Hold Ctrl while dragging to copy
-                </span>
-              </p>
-            )}
-          </div>
+        {/* Render child themes recursively */}
+        {childThemes.map((childTheme) =>
+          renderThemeCard(childTheme, depth + 1),
         )}
       </div>
-
-      {/* Render child themes recursively */}
-      {childThemes.map((childTheme) => renderThemeCard(childTheme, depth + 1))}
-    </div>
     );
   };
 
   return (
     <div className="h-full flex flex-col relative">
-      {/* Drag Mode Indicator */}
-      {draggedCode && (
-        <div className="absolute top-2 left-1/2 -translate-x-1/2 z-50 pointer-events-none">
-          <div
-            className={cn(
-              "px-4 py-2 rounded-full shadow-lg border flex items-center gap-2 transition-colors",
-              isDragCopy
-                ? "bg-accent text-accent-foreground border-accent"
-                : "bg-background text-foreground border-border",
-            )}
-          >
-            {isDragCopy ? (
-              <>
-                <Copy className="h-4 w-4" />
-                <span className="text-sm font-medium">
-                  Copy Mode - Add to multiple themes
-                </span>
-              </>
-            ) : (
-              <>
-                <GripVertical className="h-4 w-4" />
-                <span className="text-sm font-medium">
-                  Move Mode - Hold Ctrl to copy
-                </span>
-              </>
-            )}
-          </div>
-        </div>
-      )}
-
       {/* Header */}
       <div className="flex items-center justify-between pb-4 border-b border-border mb-4">
         <div>
@@ -584,7 +861,7 @@ export function ThemesView() {
             Theme Builder
           </h2>
           <p className="text-sm text-muted-foreground">
-            {themes.length} themes • Drag codes to organize
+            {themes.length} themes • Drag to move, right-click to copy
           </p>
         </div>
         <div className="flex gap-2">
@@ -668,7 +945,33 @@ export function ThemesView() {
 
       <div className="flex-1 flex gap-4 overflow-hidden">
         {/* Themes List */}
-        <div className="flex-1 overflow-auto scrollbar-thin space-y-3">
+        <div
+          className={cn(
+            "flex-1 overflow-auto scrollbar-thin space-y-3 p-2 rounded-lg transition-all",
+            themeDropTarget?.action === "main" && "bg-primary/5 ring-2 ring-primary/30"
+          )}
+          onDragOver={(e) => {
+            if (draggedTheme) {
+              e.preventDefault();
+              handleThemeDragOver(e, draggedTheme, "main-area");
+            }
+          }}
+          onDragLeave={handleThemeDragLeave}
+          onDrop={(e) => {
+            if (draggedTheme && themeDropTarget?.action === "main") {
+              handleThemeDrop(e);
+            }
+          }}
+        >
+          {themeDropTarget?.action === "main" && (
+            <div className="mb-3 p-4 border-2 border-dashed border-primary rounded-lg bg-primary/5 text-center">
+              <div className="flex items-center justify-center gap-2 text-primary font-medium">
+                <MoveUp className="h-4 w-4" />
+                <span className="text-sm">Drop here to make main theme</span>
+              </div>
+            </div>
+          )}
+          
           {mainThemes.map((theme) => renderThemeCard(theme))}
 
           {themes.length === 0 && (
@@ -681,21 +984,31 @@ export function ThemesView() {
           )}
         </div>
 
-        {/* Unassigned Codes */}
+        {/* Codes Palette */}
         <div className="w-64 flex-shrink-0 bg-card rounded-lg border border-border p-4 overflow-auto scrollbar-thin">
           <h3 className="font-semibold text-sm text-foreground mb-3">
-            Unassigned Codes ({unassignedCodes.length})
+            Codes ({sidebarCodes.length})
           </h3>
+          <p className="text-[10px] text-muted-foreground mb-2">
+            Drag to move • Right-click to copy
+          </p>
           <div className="space-y-1.5">
-            {unassignedCodes.map((code) => {
+            {sidebarCodes.map((code) => {
               const codeThemes = getCodeThemes(code.id);
               return (
                 <Tooltip key={code.id}>
                   <TooltipTrigger asChild>
                     <div
                       draggable
-                      onDragStart={() => handleDragStart(code)}
-                      onDrag={handleDrag}
+                      onDragStart={() => handleDragStart(code, null)} // null = from sidebar
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        setContextMenu({
+                          x: e.clientX,
+                          y: e.clientY,
+                          code,
+                        });
+                      }}
                       className={cn(
                         "group flex items-center gap-2 px-2.5 py-1.5 rounded-md bg-muted/50 cursor-grab active:cursor-grabbing hover:bg-muted transition-colors",
                         code.level === "main" && "border-l-2 border-code-main",
@@ -758,15 +1071,17 @@ export function ThemesView() {
                       </p>
                     )}
                     <p className="text-xs text-muted-foreground mt-1">
-                      💡 Drag to add • Hold Ctrl to copy
+                      💡 Drag to add to themes
                     </p>
                   </TooltipContent>
                 </Tooltip>
               );
             })}
-            {unassignedCodes.length === 0 && (
+            {sidebarCodes.length === 0 && (
               <p className="text-xs text-muted-foreground text-center py-4">
-                All codes are assigned to themes
+                {codes.length === 0
+                  ? "No codes created yet"
+                  : "All codes organized into themes"}
               </p>
             )}
           </div>
@@ -914,7 +1229,11 @@ export function ThemesView() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              Add {addSubThemeDialog.parentTheme?.level === "main" ? "Theme" : "Sub-theme"} under "{addSubThemeDialog.parentTheme?.name}"
+              Add{" "}
+              {addSubThemeDialog.parentTheme?.level === "main"
+                ? "Theme"
+                : "Sub-theme"}{" "}
+              under "{addSubThemeDialog.parentTheme?.name}"
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
@@ -969,6 +1288,78 @@ export function ThemesView() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Right-Click Context Menu */}
+      {contextMenu && (
+        <div
+          className="fixed bg-popover border border-border rounded-md shadow-lg z-50 min-w-[240px] max-w-[320px]"
+          style={{
+            left: contextMenu.x,
+            top: contextMenu.y,
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="px-3 py-2 border-b border-border">
+            <p className="text-xs font-medium text-muted-foreground mb-2">
+              Copy "{contextMenu.code.name}" to:
+            </p>
+            <Input
+              ref={themeSearchInputRef}
+              type="text"
+              placeholder="Search themes..."
+              value={themeSearchQuery}
+              onChange={(e) => setThemeSearchQuery(e.target.value)}
+              className="h-7 text-xs"
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+          <div className="max-h-60 overflow-auto scrollbar-thin py-1">
+            {filteredThemes.length > 0 ? (
+              <>
+                {filteredThemes.map((theme) => {
+                  const isSubtheme = !!theme.parentId;
+                  return (
+                    <button
+                      key={theme.id}
+                      className="w-full px-3 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
+                      style={{ paddingLeft: isSubtheme ? "2rem" : "0.75rem" }}
+                      onClick={() =>
+                        handleCopyToTheme(contextMenu.code, theme.id)
+                      }
+                    >
+                      <div
+                        className="w-3 h-3 rounded-full flex-shrink-0"
+                        style={{ backgroundColor: theme.color }}
+                      />
+                      <span className="flex-1 truncate">{theme.name}</span>
+                      {theme.codeIds.includes(contextMenu.code.id) && (
+                        <Check className="h-3 w-3 text-accent" />
+                      )}
+                    </button>
+                  );
+                })}
+                {themeSearchQuery && (
+                  <div className="px-3 py-1.5 text-xs text-muted-foreground border-t border-border">
+                    {filteredThemes.length} of {themes.length} themes
+                  </div>
+                )}
+              </>
+            ) : themeSearchQuery ? (
+              <div className="px-3 py-4 text-center">
+                <p className="text-xs text-muted-foreground">
+                  No themes match "{themeSearchQuery}"
+                </p>
+              </div>
+            ) : (
+              <div className="px-3 py-4 text-center">
+                <p className="text-xs text-muted-foreground">
+                  No themes available
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

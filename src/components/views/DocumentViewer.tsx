@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { useQDAStore } from "@/store/qdaStore";
 import { suggestCodes, type AICodeSuggestion } from "@/services/aiService";
 import { parseFile } from "@/utils/documentParser";
@@ -14,6 +14,9 @@ import {
   AlertTriangle,
   Trash2,
   Brain,
+  Pencil,
+  Tag,
+  Search,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,6 +42,12 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import type { TextSelection } from "@/types/qda";
@@ -62,6 +71,9 @@ export function DocumentViewer() {
     addDocument,
     logAction,
     removeExcerpt,
+    removeCodeFromExcerpt,
+    assignCodeToExcerpt,
+    updateExcerpt,
   } = useQDAStore();
 
   const workspace = getActiveWorkspace();
@@ -84,12 +96,49 @@ export function DocumentViewer() {
   } | null>(null);
   const [deleteExcerptId, setDeleteExcerptId] = useState<string | null>(null);
   const [intelligenceOpen, setIntelligenceOpen] = useState(false);
+  const [editingExcerptId, setEditingExcerptId] = useState<string | null>(null);
+  const [editCodeSearch, setEditCodeSearch] = useState("");
+  const [reselectionMode, setReselectionMode] = useState<string | null>(null); // excerptId being re-selected
+  const [codeFilterQuery, setCodeFilterQuery] = useState(""); // Search filter for selection popover
   const contentRef = useRef<HTMLDivElement>(null);
+  const codeSearchInputRef = useRef<HTMLInputElement>(null);
 
   const activeDocument = documents.find((d) => d.id === activeDocumentId);
   const documentExcerpts = excerpts.filter(
     (e) => e.documentId === activeDocumentId,
   );
+
+  // Pre-calculate code usage counts for current document - recalculates when excerpts change
+  const codeExcerptCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    console.log(
+      "[DocumentViewer] Recalculating code counts. Total excerpts:",
+      excerpts.length,
+    );
+
+    excerpts
+      .filter((e) => e.documentId === activeDocumentId)
+      .forEach((excerpt) => {
+        console.log(
+          `  Excerpt ${excerpt.id.slice(0, 8)}: codes =`,
+          excerpt.codeIds,
+        );
+        excerpt.codeIds.forEach((codeId) => {
+          counts.set(codeId, (counts.get(codeId) || 0) + 1);
+        });
+      });
+
+    console.log(
+      "[DocumentViewer] Final code counts:",
+      Array.from(counts.entries())
+        .map(
+          ([id, count]) =>
+            `${codes.find((c) => c.id === id)?.name || id.slice(0, 8)}: ${count}`,
+        )
+        .join(", "),
+    );
+    return counts;
+  }, [excerpts, activeDocumentId, codes]);
 
   // Keyboard shortcut handler for deleting selected excerpt
   useEffect(() => {
@@ -124,6 +173,16 @@ export function DocumentViewer() {
     }
   }, [contextMenu]);
 
+  // Auto-focus code search input when popover opens
+  useEffect(() => {
+    if (popoverOpen && codeSearchInputRef.current) {
+      // Small delay to ensure the popover is rendered
+      setTimeout(() => {
+        codeSearchInputRef.current?.focus();
+      }, 100);
+    }
+  }, [popoverOpen]);
+
   const handleDeleteExcerpt = (excerptId: string) => {
     const excerpt = excerpts.find((e) => e.id === excerptId);
     if (!excerpt) return;
@@ -157,23 +216,66 @@ export function DocumentViewer() {
 
       try {
         let lastDocumentId: string | null = null;
-        for (const file of Array.from(files)) {
-          const parsed = await parseFile(file);
-          const newDoc = addDocument(parsed);
-          lastDocumentId = newDoc.id;
-          toast({
-            title: "Document imported",
-            description: `"${parsed.title}" has been added to your project.`,
-          });
+        const fileArray = Array.from(files);
+        let successCount = 0;
+        let failedFiles: string[] = [];
+
+        for (const file of fileArray) {
+          try {
+            const parsed = await parseFile(file);
+            const newDoc = addDocument(parsed);
+            lastDocumentId = newDoc.id;
+            successCount++;
+            
+            if (fileArray.length === 1) {
+              toast({
+                title: "Document imported",
+                description: `"${parsed.title}" has been added to your project.`,
+              });
+            }
+          } catch (error) {
+            console.error(`Failed to parse file ${file.name}:`, error);
+            failedFiles.push(file.name);
+            
+            if (fileArray.length === 1) {
+              // Show detailed error for single file
+              toast({
+                title: "Import failed",
+                description: error instanceof Error ? error.message : "Failed to parse the file.",
+                variant: "destructive",
+              });
+            }
+          }
         }
+
+        // Show summary for multiple files
+        if (fileArray.length > 1) {
+          if (successCount > 0) {
+            toast({
+              title: `${successCount} document(s) imported`,
+              description: failedFiles.length > 0 
+                ? `Failed to import: ${failedFiles.join(", ")}`
+                : "All documents imported successfully.",
+              variant: failedFiles.length > 0 ? "default" : "default",
+            });
+          } else {
+            toast({
+              title: "Import failed",
+              description: `Failed to import all files. Check console for details.`,
+              variant: "destructive",
+            });
+          }
+        }
+
         // Automatically open the last uploaded document
         if (lastDocumentId) {
           setActiveDocument(lastDocumentId);
         }
       } catch (error) {
+        console.error("Unexpected error during file upload:", error);
         toast({
           title: "Import failed",
-          description: "Failed to parse one or more files.",
+          description: error instanceof Error ? error.message : "An unexpected error occurred.",
           variant: "destructive",
         });
       } finally {
@@ -206,6 +308,24 @@ export function DocumentViewer() {
     // For validation, check if trimmed text is empty
     if (!fullText.trim()) return;
 
+    // If in reselection mode, replace the existing excerpt with new selection
+    if (reselectionMode) {
+      updateExcerpt(reselectionMode, {
+        text: fullText,
+        startOffset,
+        endOffset,
+      });
+
+      toast({
+        title: "Highlight updated",
+        description: "The highlighted text has been changed.",
+      });
+
+      setReselectionMode(null);
+      window.getSelection()?.removeAllRanges();
+      return;
+    }
+
     const rect = range.getBoundingClientRect();
 
     // Use viewport coordinates for fixed positioning
@@ -237,13 +357,19 @@ export function DocumentViewer() {
 
     setPopoverOpen(true);
     setAiSuggestions([]);
-  }, [activeDocument, setCurrentSelection]);
+  }, [
+    activeDocument,
+    setCurrentSelection,
+    reselectionMode,
+    updateExcerpt,
+    toast,
+  ]);
 
   const handleGetAISuggestions = async () => {
     if (!currentSelection || !activeDocument) {
-      console.error("AI Suggestions Error: No selection or document", { 
-        hasSelection: !!currentSelection, 
-        hasDocument: !!activeDocument 
+      console.error("AI Suggestions Error: No selection or document", {
+        hasSelection: !!currentSelection,
+        hasDocument: !!activeDocument,
       });
       toast({
         title: "Selection Required",
@@ -252,8 +378,13 @@ export function DocumentViewer() {
       });
       return;
     }
-    
-    console.log("AI Request - Text length:", currentSelection.text.length, "Text:", currentSelection.text);
+
+    console.log(
+      "AI Request - Text length:",
+      currentSelection.text.length,
+      "Text:",
+      currentSelection.text,
+    );
     setLoadingAI(true);
 
     // Log AI request
@@ -275,7 +406,10 @@ export function DocumentViewer() {
       console.error("AI Suggestion Error:", error);
       toast({
         title: "AI Error",
-        description: error instanceof Error ? error.message : "Failed to get code suggestions.",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Failed to get code suggestions.",
         variant: "destructive",
       });
     } finally {
@@ -294,30 +428,30 @@ export function DocumentViewer() {
       // Check if there's any overlap between the new and existing excerpt
       return (
         existing.documentId === currentSelection.documentId &&
-        (
-          // New excerpt starts within existing one
-          (currentSelection.startOffset >= existing.startOffset &&
-            currentSelection.startOffset < existing.endOffset) ||
+        // New excerpt starts within existing one
+        ((currentSelection.startOffset >= existing.startOffset &&
+          currentSelection.startOffset < existing.endOffset) ||
           // New excerpt ends within existing one
           (currentSelection.endOffset > existing.startOffset &&
             currentSelection.endOffset <= existing.endOffset) ||
           // New excerpt completely contains existing one
           (currentSelection.startOffset <= existing.startOffset &&
-            currentSelection.endOffset >= existing.endOffset)
-        )
+            currentSelection.endOffset >= existing.endOffset))
       );
     });
 
     if (hasOverlap) {
       toast({
         title: "Overlapping excerpt",
-        description: "This text overlaps with an existing highlight. Please select a different area or delete the existing highlight first.",
+        description:
+          "This text overlaps with an existing highlight. Please select a different area or delete the existing highlight first.",
         variant: "destructive",
       });
       setPopoverOpen(false);
       setNewCodeName("");
       setSelectedCodes([]);
       setAiSuggestions([]);
+      setCodeFilterQuery("");
       return;
     }
 
@@ -340,6 +474,7 @@ export function DocumentViewer() {
     setNewCodeName("");
     setSelectedCodes([]);
     setAiSuggestions([]);
+    setCodeFilterQuery("");
   };
 
   const toggleCodeSelection = (codeId: string) => {
@@ -352,33 +487,32 @@ export function DocumentViewer() {
 
   const handleApplyAISuggestion = (suggestion: AICodeSuggestion) => {
     if (!currentSelection) return;
-    
+
     // CRITICAL: Clear browser selection FIRST to prevent duplicate highlighting
     window.getSelection()?.removeAllRanges();
-    
+
     // Check for overlapping excerpts to prevent duplication issues
     const hasOverlap = documentExcerpts.some((existing) => {
       // Check if there's any overlap between the new and existing excerpt
       return (
         existing.documentId === currentSelection.documentId &&
-        (
-          // New excerpt starts within existing one
-          (currentSelection.startOffset >= existing.startOffset &&
-            currentSelection.startOffset < existing.endOffset) ||
+        // New excerpt starts within existing one
+        ((currentSelection.startOffset >= existing.startOffset &&
+          currentSelection.startOffset < existing.endOffset) ||
           // New excerpt ends within existing one
           (currentSelection.endOffset > existing.startOffset &&
             currentSelection.endOffset <= existing.endOffset) ||
           // New excerpt completely contains existing one
           (currentSelection.startOffset <= existing.startOffset &&
-            currentSelection.endOffset >= existing.endOffset)
-        )
+            currentSelection.endOffset >= existing.endOffset))
       );
     });
 
     if (hasOverlap) {
       toast({
         title: "Overlapping excerpt",
-        description: "This text overlaps with an existing highlight. Please select a different area or delete the existing highlight first.",
+        description:
+          "This text overlaps with an existing highlight. Please select a different area or delete the existing highlight first.",
         variant: "destructive",
       });
       setPopoverOpen(false);
@@ -386,9 +520,10 @@ export function DocumentViewer() {
       setAiSuggestions([]);
       setSelectedCodes([]);
       setNewCodeName("");
+      setCodeFilterQuery("");
       return;
     }
-    
+
     let codeId: string;
 
     if (suggestion.existingMatch) {
@@ -432,6 +567,7 @@ export function DocumentViewer() {
     setAiSuggestions([]);
     setSelectedCodes([]);
     setNewCodeName("");
+    setCodeFilterQuery("");
   };
 
   // Render text with highlights
@@ -447,44 +583,82 @@ export function DocumentViewer() {
     let lastEnd = 0;
 
     sortedExcerpts.forEach((excerpt, idx) => {
+      // CRITICAL FIX: Skip deleted excerpts by checking if they still exist in store
+      const currentExcerpt = excerpts.find((e) => e.id === excerpt.id);
+      if (!currentExcerpt) {
+        // Excerpt was deleted, skip it entirely
+        return;
+      }
+
       // CRITICAL FIX: Skip overlapping excerpts to prevent text duplication
-      if (excerpt.startOffset < lastEnd) {
-        console.warn(`Skipping overlapping excerpt ${excerpt.id}: starts at ${excerpt.startOffset} but lastEnd is ${lastEnd}`);
+      if (currentExcerpt.startOffset < lastEnd) {
+        console.warn(
+          `Skipping overlapping excerpt ${currentExcerpt.id}: starts at ${currentExcerpt.startOffset} but lastEnd is ${lastEnd}`,
+        );
         // Update lastEnd if this excerpt extends beyond the current one
-        lastEnd = Math.max(lastEnd, excerpt.endOffset);
+        lastEnd = Math.max(lastEnd, currentExcerpt.endOffset);
         return;
       }
 
       // Text before this excerpt - render as-is, no splitting
-      if (excerpt.startOffset > lastEnd) {
-        const textBefore = content.slice(lastEnd, excerpt.startOffset);
+      if (currentExcerpt.startOffset > lastEnd) {
+        const textBefore = content.slice(lastEnd, currentExcerpt.startOffset);
         elements.push(<span key={`text-${idx}`}>{textBefore}</span>);
       }
 
       // The highlighted excerpt
-      const excerptCodes = codes.filter((c) => excerpt.codeIds.includes(c.id));
+      const excerptCodes = codes.filter((c) =>
+        currentExcerpt.codeIds.includes(c.id),
+      );
       const primaryLevel = excerptCodes[0]?.level || "main";
 
       // Use actual content slice to ensure perfect alignment with offsets
-      const excerptText = content.slice(excerpt.startOffset, excerpt.endOffset);
-      const isHovered = hoveredExcerptId === excerpt.id;
-      const isSelected = selectedExcerptId === excerpt.id;
+      const excerptText = content.slice(
+        currentExcerpt.startOffset,
+        currentExcerpt.endOffset,
+      );
+      const isHovered = hoveredExcerptId === currentExcerpt.id;
+      const isSelected = selectedExcerptId === currentExcerpt.id;
+      const isEditing = editingExcerptId === currentExcerpt.id;
+      const isReselecting = reselectionMode === currentExcerpt.id;
+
+      // Available codes to add (not already assigned)
+      const availableCodes = codes.filter(
+        (c) =>
+          !currentExcerpt.codeIds.includes(c.id) &&
+          c.name.toLowerCase().includes(editCodeSearch.toLowerCase()),
+      );
+
+      // Create a key that changes when codes change to force re-render
+      const excerptKey = `excerpt-${currentExcerpt.id}-${currentExcerpt.codeIds.join(",")}`;
 
       elements.push(
-        <Tooltip key={`excerpt-${excerpt.id}`}>
-          <TooltipTrigger asChild>
+        <Popover
+          key={excerptKey}
+          open={isEditing}
+          onOpenChange={(open) => {
+            if (!open) {
+              setEditingExcerptId(null);
+              setEditCodeSearch("");
+            }
+          }}
+        >
+          <PopoverTrigger asChild>
             <span
               className={cn(
-                "highlight-block relative inline-block group",
+                "highlight-block relative inline-block group cursor-pointer",
                 primaryLevel === "child" && "highlight-block-child",
                 primaryLevel === "subchild" && "highlight-block-subchild",
                 isSelected && "ring-2 ring-accent ring-offset-1",
+                isEditing && "ring-2 ring-primary ring-offset-1",
+                isReselecting &&
+                  "ring-4 ring-yellow-500 ring-offset-2 animate-pulse",
               )}
-              onMouseEnter={() => setHoveredExcerptId(excerpt.id)}
+              onMouseEnter={() => setHoveredExcerptId(currentExcerpt.id)}
               onMouseLeave={() => setHoveredExcerptId(null)}
               onClick={(e) => {
                 e.stopPropagation();
-                setSelectedExcerpt(excerpt.id);
+                setSelectedExcerpt(currentExcerpt.id);
               }}
               onContextMenu={(e) => {
                 e.preventDefault();
@@ -492,50 +666,177 @@ export function DocumentViewer() {
                 setContextMenu({
                   x: e.clientX,
                   y: e.clientY,
-                  excerptId: excerpt.id,
+                  excerptId: currentExcerpt.id,
                 });
-                setSelectedExcerpt(excerpt.id);
+                setSelectedExcerpt(currentExcerpt.id);
               }}
             >
               {excerptText}
-              {isHovered && (
+              {isHovered && !isEditing && !isReselecting && (
+                <div className="absolute -top-1 -right-1 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                  <button
+                    className="h-4 w-4 rounded-full bg-yellow-500 text-white flex items-center justify-center hover:scale-110 transition-transform"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setReselectionMode(currentExcerpt.id);
+                      toast({
+                        title: "Re-select highlight",
+                        description:
+                          "Select new text to replace this highlight",
+                      });
+                    }}
+                    title="Re-select text"
+                  >
+                    <Pencil className="h-2.5 w-2.5" />
+                  </button>
+                  <button
+                    className="h-4 w-4 rounded-full bg-accent text-accent-foreground flex items-center justify-center hover:scale-110 transition-transform"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEditingExcerptId(currentExcerpt.id);
+                      setEditCodeSearch("");
+                    }}
+                    title="Edit codes"
+                  >
+                    <Tag className="h-2.5 w-2.5" />
+                  </button>
+                  <button
+                    className="h-4 w-4 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center hover:scale-110 transition-transform"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDeleteExcerptId(currentExcerpt.id);
+                    }}
+                    title="Delete excerpt"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              )}
+            </span>
+          </PopoverTrigger>
+          <PopoverContent className="w-72 p-3" align="start">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h4 className="font-medium text-sm">Edit Codes</h4>
                 <button
-                  className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:scale-110 z-10"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setDeleteExcerptId(excerpt.id);
+                  className="h-5 w-5 rounded hover:bg-muted flex items-center justify-center"
+                  onClick={() => {
+                    setEditingExcerptId(null);
+                    setEditCodeSearch("");
                   }}
-                  title="Delete excerpt"
                 >
                   <X className="h-3 w-3" />
                 </button>
-              )}
-            </span>
-          </TooltipTrigger>
-          <TooltipContent>
-            <div className="max-w-xs">
-              <p className="font-medium mb-1">Codes:</p>
-              <div className="flex flex-wrap gap-1">
-                {excerptCodes.map((c) => (
-                  <span
-                    key={c.id}
-                    className="text-xs bg-muted px-1.5 py-0.5 rounded"
-                  >
-                    {c.name}
-                  </span>
-                ))}
               </div>
-              {excerpt.memo && (
-                <p className="text-xs mt-2 text-muted-foreground">
-                  Memo: {excerpt.memo}
+
+              {/* Current codes with remove buttons */}
+              <div>
+                <p className="text-xs text-muted-foreground mb-1.5">
+                  Assigned codes:
                 </p>
-              )}
+                <div className="flex flex-wrap gap-1.5">
+                  {excerptCodes.length > 0 ? (
+                    excerptCodes.map((code) => (
+                      <span
+                        key={code.id}
+                        className={cn(
+                          "inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full",
+                          code.level === "main" &&
+                            "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
+                          code.level === "child" &&
+                            "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
+                          code.level === "subchild" &&
+                            "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200",
+                        )}
+                      >
+                        {code.name}
+                        <button
+                          className="h-3.5 w-3.5 rounded-full hover:bg-black/20 flex items-center justify-center"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeCodeFromExcerpt(currentExcerpt.id, code.id);
+                            toast({
+                              title: "Code removed",
+                              description: `"${code.name}" removed from excerpt.`,
+                            });
+                          }}
+                          title={`Remove ${code.name}`}
+                        >
+                          <X className="h-2.5 w-2.5" />
+                        </button>
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-xs text-muted-foreground italic">
+                      No codes assigned
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Search/add codes */}
+              <div>
+                <Input
+                  placeholder="Search or create code..."
+                  value={editCodeSearch}
+                  onChange={(e) => setEditCodeSearch(e.target.value)}
+                  className="h-8 text-sm"
+                />
+                <ScrollArea className="h-32 mt-2">
+                  <div className="space-y-0.5">
+                    {availableCodes.map((code) => (
+                      <button
+                        key={code.id}
+                        className="w-full text-left px-2 py-1.5 text-sm rounded hover:bg-muted flex items-center gap-2"
+                        onClick={() => {
+                          assignCodeToExcerpt(currentExcerpt.id, code.id);
+                          setEditCodeSearch("");
+                          toast({
+                            title: "Code added",
+                            description: `"${code.name}" added to excerpt.`,
+                          });
+                        }}
+                      >
+                        <Plus className="h-3 w-3 text-muted-foreground" />
+                        {code.name}
+                      </button>
+                    ))}
+                    {/* Create new code option */}
+                    {editCodeSearch.trim() &&
+                      !codes.some(
+                        (c) =>
+                          c.name.toLowerCase() === editCodeSearch.toLowerCase(),
+                      ) && (
+                        <button
+                          className="w-full text-left px-2 py-1.5 text-sm rounded hover:bg-muted flex items-center gap-2 text-accent"
+                          onClick={() => {
+                            const newCode = addCode(editCodeSearch.trim());
+                            assignCodeToExcerpt(currentExcerpt.id, newCode.id);
+                            setEditCodeSearch("");
+                            toast({
+                              title: "Code created",
+                              description: `"${editCodeSearch.trim()}" created and added.`,
+                            });
+                          }}
+                        >
+                          <Plus className="h-3 w-3" />
+                          Create "{editCodeSearch.trim()}"
+                        </button>
+                      )}
+                    {availableCodes.length === 0 && !editCodeSearch.trim() && (
+                      <p className="text-xs text-muted-foreground text-center py-3">
+                        Type to search or create a code
+                      </p>
+                    )}
+                  </div>
+                </ScrollArea>
+              </div>
             </div>
-          </TooltipContent>
-        </Tooltip>,
+          </PopoverContent>
+        </Popover>,
       );
 
-      lastEnd = excerpt.endOffset;
+      lastEnd = currentExcerpt.endOffset;
     });
 
     // Remaining text - render as-is, no splitting
@@ -652,6 +953,36 @@ export function DocumentViewer() {
         </div>
       </div>
 
+      {/* Re-selection Mode Banner */}
+      {reselectionMode && (
+        <div className="bg-yellow-500 text-white px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Pencil className="h-5 w-5 animate-pulse" />
+            <div>
+              <p className="font-medium">Re-select Highlight</p>
+              <p className="text-sm text-yellow-100">
+                Select new text to replace this highlight (codes will be
+                preserved)
+              </p>
+            </div>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setReselectionMode(null);
+              toast({
+                title: "Cancelled",
+                description: "Re-selection mode cancelled",
+              });
+            }}
+            className="text-white hover:bg-yellow-600"
+          >
+            Cancel
+          </Button>
+        </div>
+      )}
+
       {/* Document Content */}
       <div
         ref={contentRef}
@@ -703,6 +1034,7 @@ export function DocumentViewer() {
                   setPopoverOpen(false);
                   setCurrentSelection(null);
                   setAiSuggestions([]);
+                  setCodeFilterQuery("");
                 }}
               >
                 <X className="h-3 w-3" />
@@ -768,53 +1100,100 @@ export function DocumentViewer() {
             )}
 
             {/* Existing Codes */}
-            <div className="max-h-28 overflow-auto scrollbar-thin mb-3">
-              <p className="text-xs text-muted-foreground mb-1.5">
-                Existing codes:
-              </p>
-              {codes.length > 0 ? (
-                <div className="flex flex-wrap gap-1">
-                  {codes.map((code) => {
-                    // Count excerpts in current document
-                    const excerptsInDoc =
-                      activeDocument?.excerpts?.filter(
-                        (e) => e.codeId === code.id,
-                      ).length || 0;
+            <div className="mb-3">
+              <div className="flex items-center justify-between mb-1.5">
+                <p className="text-xs text-muted-foreground">Existing codes:</p>
+                <span className="text-[10px] text-muted-foreground">
+                  {
+                    codes.filter((c) =>
+                      c.name
+                        .toLowerCase()
+                        .includes(codeFilterQuery.toLowerCase()),
+                    ).length
+                  }{" "}
+                  of {codes.length}
+                </span>
+              </div>
 
-                    return (
-                      <button
-                        key={code.id}
-                        onClick={() => toggleCodeSelection(code.id)}
-                        className={cn(
-                          "code-chip transition-all relative",
-                          selectedCodes.includes(code.id)
-                            ? "ring-2 ring-accent ring-offset-1"
-                            : excerptsInDoc > 0
-                              ? "opacity-90 hover:opacity-100"
-                              : "opacity-70 hover:opacity-100",
-                          code.level === "main" && "code-chip-main",
-                          code.level === "child" && "code-chip-child",
-                          code.level === "subchild" && "code-chip-subchild",
-                        )}
-                      >
-                        {selectedCodes.includes(code.id) && (
-                          <Check className="h-3 w-3" />
-                        )}
-                        {code.name}
-                        {excerptsInDoc > 0 && (
-                          <span className="ml-1 text-[10px] px-1 py-0.5 rounded bg-background/50 font-medium">
-                            {excerptsInDoc}
-                          </span>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              ) : (
-                <p className="text-xs text-muted-foreground italic">
-                  No codes yet
-                </p>
-              )}
+              {/* Search Input */}
+              <div className="relative mb-2">
+                <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+                <Input
+                  ref={codeSearchInputRef}
+                  placeholder="Search codes..."
+                  value={codeFilterQuery}
+                  onChange={(e) => setCodeFilterQuery(e.target.value)}
+                  className="h-7 text-xs pl-7 pr-7"
+                />
+                {codeFilterQuery && (
+                  <button
+                    onClick={() => setCodeFilterQuery("")}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 rounded-full hover:bg-muted flex items-center justify-center"
+                  >
+                    <X className="h-2.5 w-2.5 text-muted-foreground" />
+                  </button>
+                )}
+              </div>
+
+              <div className="max-h-28 overflow-auto scrollbar-thin">
+                {codes.length > 0 ? (
+                  <div className="flex flex-wrap gap-1">
+                    {codes
+                      .filter((code) =>
+                        code.name
+                          .toLowerCase()
+                          .includes(codeFilterQuery.toLowerCase()),
+                      )
+                      .map((code) => {
+                        // Get pre-calculated count from useMemo
+                        const excerptsInDoc =
+                          codeExcerptCounts.get(code.id) || 0;
+
+                        return (
+                          <button
+                            key={code.id}
+                            onClick={() => toggleCodeSelection(code.id)}
+                            className={cn(
+                              "code-chip transition-all relative",
+                              selectedCodes.includes(code.id)
+                                ? "ring-2 ring-accent ring-offset-1"
+                                : excerptsInDoc > 0
+                                  ? "opacity-90 hover:opacity-100"
+                                  : "opacity-70 hover:opacity-100",
+                              code.level === "main" && "code-chip-main",
+                              code.level === "child" && "code-chip-child",
+                              code.level === "subchild" && "code-chip-subchild",
+                            )}
+                          >
+                            {selectedCodes.includes(code.id) && (
+                              <Check className="h-3 w-3" />
+                            )}
+                            {code.name}
+                            {excerptsInDoc > 0 && (
+                              <span className="ml-1 text-[10px] px-1 py-0.5 rounded bg-background/50 font-medium">
+                                {excerptsInDoc}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground italic">
+                    No codes yet
+                  </p>
+                )}
+                {codes.length > 0 &&
+                  codes.filter((c) =>
+                    c.name
+                      .toLowerCase()
+                      .includes(codeFilterQuery.toLowerCase()),
+                  ).length === 0 && (
+                    <p className="text-xs text-muted-foreground italic text-center py-2">
+                      No codes match "{codeFilterQuery}"
+                    </p>
+                  )}
+              </div>
             </div>
 
             {/* New Code Input */}

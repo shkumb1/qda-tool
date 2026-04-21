@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQDAStore } from "@/store/qdaStore";
 import { getCodeExcerptCount } from "@/utils/analysisHelpers";
 import {
@@ -71,6 +71,19 @@ export function CodesView() {
     ? codes.filter((c) => c.name.toLowerCase().includes(search.toLowerCase()))
     : mainCodes;
 
+  // Pre-calculate excerpt counts to force re-render when they change
+  const excerptCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    codes.forEach((code) => {
+      counts.set(code.id, getCodeExcerptCount(code.id, excerpts));
+    });
+    console.log(
+      "[CodesView] Recalculated excerpt counts:",
+      Object.fromEntries(counts),
+    );
+    return counts;
+  }, [codes, excerpts]);
+
   const toggleExpand = (codeId: string) => {
     const newExpanded = new Set(expandedCodes);
     if (newExpanded.has(codeId)) {
@@ -106,9 +119,10 @@ export function CodesView() {
     const children = getChildCodes(code.id);
     const hasChildren = children.length > 0;
     const isExpanded = expandedCodes.has(code.id);
+    const excerptCount = excerptCounts.get(code.id) || 0;
 
     return (
-      <div key={code.id}>
+      <div key={`${code.id}-${excerptCount}`}>
         <div
           className={cn(
             "group flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer",
@@ -160,7 +174,7 @@ export function CodesView() {
 
           {/* Frequency */}
           <span className="text-xs text-muted-foreground tabular-nums">
-            {getCodeExcerptCount(code.id, excerpts)}
+            {excerptCount}
           </span>
 
           {/* Actions */}

@@ -443,38 +443,25 @@ export function RefinerView() {
                   </Tooltip>
                 </div>
 
-                {/* Documents tooltip */}
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <div className="flex -space-x-1 mb-3">
-                      {codeDocsList.slice(0, 3).map((doc) => (
-                        <div
+                {/* Documents list */}
+                <div className="mb-3">
+                  {codeDocsList.length > 0 ? (
+                    <div className="flex flex-wrap gap-1">
+                      {codeDocsList.map((doc) => (
+                        <span
                           key={doc.id}
-                          className="w-6 h-6 rounded-full bg-muted flex items-center justify-center text-[10px] font-medium border-2 border-card"
+                          className="text-[10px] px-2 py-0.5 rounded bg-muted text-muted-foreground font-medium"
                         >
-                          {doc.title.charAt(0).toUpperCase()}
-                        </div>
+                          {doc.title}
+                        </span>
                       ))}
-                      {codeDocsList.length > 3 && (
-                        <div className="w-6 h-6 rounded-full bg-accent text-accent-foreground flex items-center justify-center text-[10px] font-medium border-2 border-card">
-                          +{codeDocsList.length - 3}
-                        </div>
-                      )}
-                      {codeDocsList.length === 0 && (
-                        <div className="w-6 h-6 rounded-full bg-muted/50 flex items-center justify-center text-[10px] text-muted-foreground">
-                          —
-                        </div>
-                      )}
                     </div>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p className="text-xs">
-                      {codeDocsList.length > 0
-                        ? codeDocsList.map((d) => d.title).join(", ")
-                        : "No documents"}
-                    </p>
-                  </TooltipContent>
-                </Tooltip>
+                  ) : (
+                    <span className="text-xs text-muted-foreground italic">
+                      No documents
+                    </span>
+                  )}
+                </div>
 
                 {/* Actions */}
                 <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">

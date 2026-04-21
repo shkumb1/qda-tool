@@ -11,6 +11,8 @@ import {
   Sparkles,
   Loader2,
   Trash2,
+  Plus,
+  Check,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -24,6 +26,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Input } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 
@@ -42,12 +51,18 @@ export function RightPanel() {
     addMemo,
     updateMemo,
     removeExcerpt,
+    removeCodeFromExcerpt,
+    assignCodeToExcerpt,
+    addCode,
   } = useQDAStore();
 
   const [memoInput, setMemoInput] = useState("");
   const [aiSummary, setAiSummary] = useState<AISummary | null>(null);
   const [loadingAI, setLoadingAI] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [addCodeOpen, setAddCodeOpen] = useState(false);
+  const [codeSearchQuery, setCodeSearchQuery] = useState("");
+  const [newCodeName, setNewCodeName] = useState("");
 
   const selectedExcerpt = excerpts.find((e) => e.id === selectedExcerptId);
   const selectedCode = codes.find((c) => c.id === selectedCodeId);
@@ -150,36 +165,175 @@ export function RightPanel() {
         <div className="flex-1 overflow-auto p-4 space-y-4 scrollbar-thin">
           {/* Excerpt Text */}
           <div className="panel-section p-3">
-            <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
-              <FileText className="h-3 w-3" />
-              <span>{doc?.title || "Unknown document"}</span>
+            <div className="flex items-center justify-between text-xs text-muted-foreground mb-2">
+              <div className="flex items-center gap-2">
+                <FileText className="h-3 w-3" />
+                <span>{doc?.title || "Unknown document"}</span>
+              </div>
+              <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded">
+                {selectedExcerpt.text.length} char
+                {selectedExcerpt.text.length !== 1 ? "s" : ""} • Position{" "}
+                {selectedExcerpt.startOffset}
+              </span>
             </div>
-            <p className="text-sm text-foreground leading-relaxed bg-muted/50 p-3 rounded-md border-l-4 border-accent">
-              "{selectedExcerpt.text}"
-            </p>
+            <div className="relative bg-muted/50 p-3 rounded-md border-l-4 border-accent">
+              <div className="absolute top-2 left-2 text-4xl text-accent/20 font-serif">
+                "
+              </div>
+              <p className="text-sm text-foreground leading-relaxed pl-6 pr-3 min-h-[2rem] break-words">
+                {selectedExcerpt.text}
+              </p>
+              <div className="absolute bottom-2 right-2 text-4xl text-accent/20 font-serif">
+                "
+              </div>
+            </div>
           </div>
 
           {/* Assigned Codes */}
           <div>
-            <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
-              Assigned Codes
-            </h4>
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                Assigned Codes
+              </h4>
+              <Popover open={addCodeOpen} onOpenChange={setAddCodeOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 px-2 text-xs"
+                  >
+                    <Plus className="h-3 w-3 mr-1" />
+                    Add Code
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-64 p-2" align="end">
+                  <div className="space-y-2">
+                    <Input
+                      placeholder="Search or create code..."
+                      value={codeSearchQuery}
+                      onChange={(e) => {
+                        setCodeSearchQuery(e.target.value);
+                        setNewCodeName(e.target.value);
+                      }}
+                      className="h-8 text-sm"
+                    />
+                    <ScrollArea className="h-40">
+                      <div className="space-y-1">
+                        {/* Show existing codes that match search and aren't already assigned */}
+                        {codes
+                          .filter(
+                            (c) =>
+                              !selectedExcerpt.codeIds.includes(c.id) &&
+                              c.name
+                                .toLowerCase()
+                                .includes(codeSearchQuery.toLowerCase()),
+                          )
+                          .map((code) => (
+                            <button
+                              key={code.id}
+                              className="w-full text-left px-2 py-1.5 text-sm rounded hover:bg-muted flex items-center gap-2"
+                              onClick={() => {
+                                assignCodeToExcerpt(
+                                  selectedExcerpt.id,
+                                  code.id,
+                                );
+                                setAddCodeOpen(false);
+                                setCodeSearchQuery("");
+                                toast({
+                                  title: "Code assigned",
+                                  description: `"${code.name}" added to excerpt.`,
+                                });
+                              }}
+                            >
+                              <span
+                                className={cn(
+                                  "w-2 h-2 rounded-full",
+                                  code.level === "main" && "bg-blue-500",
+                                  code.level === "child" && "bg-green-500",
+                                  code.level === "subchild" && "bg-purple-500",
+                                )}
+                              />
+                              {code.name}
+                            </button>
+                          ))}
+                        {/* Option to create new code if search doesn't match existing */}
+                        {codeSearchQuery.trim() &&
+                          !codes.some(
+                            (c) =>
+                              c.name.toLowerCase() ===
+                              codeSearchQuery.toLowerCase(),
+                          ) && (
+                            <button
+                              className="w-full text-left px-2 py-1.5 text-sm rounded hover:bg-muted flex items-center gap-2 text-accent"
+                              onClick={() => {
+                                const newCode = addCode(codeSearchQuery.trim());
+                                assignCodeToExcerpt(
+                                  selectedExcerpt.id,
+                                  newCode.id,
+                                );
+                                setAddCodeOpen(false);
+                                setCodeSearchQuery("");
+                                toast({
+                                  title: "Code created and assigned",
+                                  description: `"${codeSearchQuery.trim()}" created and added to excerpt.`,
+                                });
+                              }}
+                            >
+                              <Plus className="h-3 w-3" />
+                              Create "{codeSearchQuery.trim()}"
+                            </button>
+                          )}
+                        {codes.filter(
+                          (c) =>
+                            !selectedExcerpt.codeIds.includes(c.id) &&
+                            c.name
+                              .toLowerCase()
+                              .includes(codeSearchQuery.toLowerCase()),
+                        ).length === 0 &&
+                          !codeSearchQuery.trim() && (
+                            <p className="text-xs text-muted-foreground px-2 py-4 text-center">
+                              All codes assigned or type to create new
+                            </p>
+                          )}
+                      </div>
+                    </ScrollArea>
+                  </div>
+                </PopoverContent>
+              </Popover>
+            </div>
             <div className="flex flex-wrap gap-1.5">
               {excerptCodes.map((code) => (
                 <span
                   key={code.id}
                   className={cn(
-                    "code-chip cursor-pointer hover:opacity-80 transition-opacity",
+                    "code-chip group relative pr-6 cursor-pointer hover:opacity-90 transition-opacity",
                     code.level === "main" && "code-chip-main",
                     code.level === "child" && "code-chip-child",
                     code.level === "subchild" && "code-chip-subchild",
                   )}
-                  onClick={() => {
-                    setSelectedExcerpt(null);
-                    setSelectedCode(code.id);
-                  }}
                 >
-                  {code.name}
+                  <span
+                    onClick={() => {
+                      setSelectedExcerpt(null);
+                      setSelectedCode(code.id);
+                    }}
+                  >
+                    {code.name}
+                  </span>
+                  <button
+                    className="absolute right-1 top-1/2 -translate-y-1/2 h-4 w-4 rounded-full bg-black/20 hover:bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      removeCodeFromExcerpt(selectedExcerpt.id, code.id);
+                      toast({
+                        title: "Code removed",
+                        description: `"${code.name}" removed from excerpt.`,
+                      });
+                    }}
+                    title={`Remove "${code.name}" from excerpt`}
+                  >
+                    <X className="h-2.5 w-2.5 text-white" />
+                  </button>
                 </span>
               ))}
               {excerptCodes.length === 0 && (
