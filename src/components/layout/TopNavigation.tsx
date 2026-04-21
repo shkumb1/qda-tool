@@ -338,51 +338,6 @@ export function TopNavigation() {
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={() => {
-                    const exportWorkspaceData = useQDAStore.getState().exportWorkspaceData;
-                    const workspace = getActiveWorkspace();
-                    
-                    if (!workspace) {
-                      toast({
-                        title: "Export failed",
-                        description: "No active workspace",
-                        variant: "destructive",
-                      });
-                      return;
-                    }
-
-                    const data = exportWorkspaceData();
-                    if (!data) {
-                      toast({
-                        title: "Export failed",
-                        description: "Failed to export workspace data",
-                        variant: "destructive",
-                      });
-                      return;
-                    }
-
-                    // Download as JSON file
-                    const blob = new Blob([data], { type: "application/json" });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement("a");
-                    a.href = url;
-                    a.download = `workspace-${workspace.name.replace(/\s+/g, "-").toLowerCase()}-${Date.now()}.json`;
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    URL.revokeObjectURL(url);
-
-                    toast({
-                      title: "Workspace exported!",
-                      description: "Share this file with collaborators to let them join.",
-                      duration: 5000,
-                    });
-                  }}
-                >
-                  <Download className="h-4 w-4 mr-2" />
-                  Export Workspace for Sharing
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => {
                     leaveWorkspace();
                     toast({ title: "Left workspace" });
                   }}

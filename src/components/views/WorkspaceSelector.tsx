@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useQDAStore } from "@/store/qdaStore";
 import { useHelpStore } from "@/store/helpStore";
 import {
@@ -9,8 +9,6 @@ import {
   Copy,
   Check,
   Trash2,
-  Download,
-  Upload,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -44,14 +42,11 @@ export function WorkspaceSelector() {
     setActiveWorkspace,
     createWorkspace,
     joinWorkspace,
-    importWorkspaceData,
-    exportWorkspaceData,
     clearLegacyStudies,
   } = useQDAStore();
   const { setShowOnboarding } = useHelpStore();
 
   const { toast } = useToast();
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [joinDialogOpen, setJoinDialogOpen] = useState(false);
   const [showLegacyAlert, setShowLegacyAlert] = useState(false);
@@ -59,7 +54,6 @@ export function WorkspaceSelector() {
   const [collaboratorName, setCollaboratorName] = useState("");
   const [joinCode, setJoinCode] = useState("");
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
-  const [workspaceFile, setWorkspaceFile] = useState<File | null>(null);
 
   // Check for legacy studies (studies not in any workspace)
   useEffect(() => {
@@ -122,52 +116,11 @@ export function WorkspaceSelector() {
     if (!collaboratorName.trim()) {
       toast({
         title: "Missing information",
-        description: "Please provide your name.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Try importing from file first if provided
-    if (workspaceFile) {
-      try {
-        const fileContent = await workspaceFile.text();
-        const workspace = importWorkspaceData(fileContent, collaboratorName);
-        
-        if (!workspace) {
-          toast({
-            title: "Import failed",
-            description: "Invalid workspace file. Please check the file and try again.",
-            variant: "destructive",
-          });
-          return;
-        }
-
-        setJoinDialogOpen(false);
-        setJoinCode("");
-        setCollaboratorName("");
-        setWorkspaceFile(null);
-        
-        toast({
-          title: "Joined workspace!",
-          description: `Welcome to "${workspace.name}"`,
-        });
-        return;
-      } catch (error) {
-        toast({
-          title: "Import failed",
-          description: "Failed to read workspace file.",
-          variant: "destructive",
-        });
-        return;
-      }
-    }
-
-    // Fallback to code-based join (only works locally)
-    if (!joinCode.trim()) {
+        description: "Please p() => {
+    if (!joinCode.trim() || !collaboratorName.trim()) {
       toast({
         title: "Missing information",
-        description: "Please upload a workspace file or enter a workspace code.",
+        description: "Please provide both workspace code and your name.",
         variant: "destructive",
       });
       return;
@@ -177,7 +130,7 @@ export function WorkspaceSelector() {
     if (!workspace) {
       toast({
         title: "Workspace not found",
-        description: "Workspace code not found locally. Ask your collaborator to share the workspace file instead.",
+        description: "Invalid workspace code. Please check and try again.",
         variant: "destructive",
       });
       return;
@@ -189,57 +142,7 @@ export function WorkspaceSelector() {
     toast({
       title: "Joined workspace!",
       description: `Welcome to "${workspace.name}"`,
-    });
-  };
-
-  const handleExportWorkspace = (workspaceId: string, workspaceName: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    
-    // Set active workspace temporarily to export it
-    const currentActive = useQDAStore.getState().activeWorkspaceId;
-    setActiveWorkspace(workspaceId);
-    
-    const data = exportWorkspaceData();
-    
-    // Restore previous active workspace
-    setActiveWorkspace(currentActive);
-    
-    if (!data) {
-      toast({
-        title: "Export failed",
-        description: "Failed to export workspace data.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Download as JSON file
-    const blob = new Blob([data], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `workspace-${workspaceName.replace(/\s+/g, "-").toLowerCase()}-${Date.now()}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-
-    toast({
-      title: "Workspace exported!",
-      description: "Share this file with collaborators to let them join.",
-      duration: 5000,
-    });
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setWorkspaceFile(file);
-    }
-  };
-
-  const handleCopyCode = (code: string) => {
-    navigator.clipboard.writeText(code);
+    });avigator.clipboard.writeText(code);
     setCopiedCode(code);
     setTimeout(() => setCopiedCode(null), 2000);
     toast({ title: "Code copied to clipboard!" });
@@ -472,17 +375,7 @@ export function WorkspaceSelector() {
                 <div className="absolute inset-0 flex items-center">
                   <span className="w-full border-t" />
                 </div>
-                <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-background px-2 text-muted-foreground">
-                    Recommended Method
-                  </span>
-                </div>
-              </div>
-
-              <div>
-                <Label htmlFor="workspace-file">Upload Workspace File</Label>
-                <div className="mt-2">
-                  <input
+                <div className=
                     ref={fileInputRef}
                     id="workspace-file"
                     type="file"
@@ -554,43 +447,34 @@ export function WorkspaceSelector() {
             <AlertDialogHeader>
               <AlertDialogTitle>Legacy Studies Detected</AlertDialogTitle>
               <AlertDialogDescription>
-                You have{" "}
-                {
-                  studies.filter(
-                    (s) => !workspaces.flatMap((w) => w.studyIds).includes(s.id)
-                  ).length
-                }{" "}
-                studies from before workspaces were created. These studies
-                aren't associated with any workspace.
-                <br />
-                <br />
-                Would you like to clean them up? This will permanently delete
-                studies that aren't in any workspace.
-                <br />
-                <br />
-                <strong>Note:</strong> Your current workspaces and their studies
-                will not be affected.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Keep Legacy Studies</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={() => {
-                  clearLegacyStudies();
-                  toast({
-                    title: "Legacy studies cleaned",
-                    description: "Unassociated studies have been removed.",
-                  });
-                }}
-                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              >
-                <Trash2 className="h-4 w-4 mr-2" />
-                Clean Up Legacy Data
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      </div>
-    </div>
-  );
-}
+                Enter the 6-character workspace code shared by your team
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div>
+                <Label htmlFor="join-code">Workspace Code</Label>
+                <Input
+                  id="join-code"
+                  placeholder="e.g., ABC123"
+                  value={joinCode}
+                  onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                  onKeyDown={(e) => e.key === "Enter" && handleJoinWorkspace()}
+                  className="font-mono text-lg uppercase"
+                  maxLength={6}
+                />
+              </div>
+              <div>
+                <Label htmlFor="your-name-join">Your Name</Label>
+                <Input
+                  id="your-name-join"
+                  placeholder="e.g., Dr. Sarah Smith"
+                  value={collaboratorName}
+                  onChange={(e) => setCollaboratorName(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleJoinWorkspace()}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setJoinDialogOpen(false)

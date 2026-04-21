@@ -65,8 +65,6 @@ interface QDAState {
   // Workspace actions
   createWorkspace: (name: string, collaboratorName: string) => Workspace;
   joinWorkspace: (code: string, collaboratorName: string) => Workspace | null;
-  importWorkspaceData: (workspaceData: string, collaboratorName: string) => Workspace | null;
-  exportWorkspaceData: () => string | null;
   setActiveWorkspace: (id: string | null) => void;
   leaveWorkspace: () => void;
   getActiveWorkspace: () => Workspace | null;
@@ -383,84 +381,6 @@ export const useQDAStore = create<QDAState>()(
         }));
 
         return workspace;
-      },
-
-      exportWorkspaceData: () => {
-        const state = get();
-        const workspace = state.getActiveWorkspace();
-        if (!workspace) return null;
-
-        const workspaceStudies = state.getWorkspaceStudies();
-        const exportData = {
-          workspace: {
-            ...workspace,
-            // Don't export collaborators - they'll be recreated on import
-            collaborators: [workspace.collaborators.find(c => c.id === workspace.createdBy)].filter(Boolean),
-          },
-          studies: workspaceStudies,
-          exportedAt: new Date().toISOString(),
-          version: "1.0",
-        };
-
-        return JSON.stringify(exportData, null, 2);
-      },
-
-      importWorkspaceData: (workspaceData, collaboratorName) => {
-        try {
-          const data = JSON.parse(workspaceData);
-          if (!data.workspace || !data.workspace.code) {
-            console.error("Invalid workspace data");
-            return null;
-          }
-
-          const state = get();
-          
-          // Check if workspace already exists
-          const existingWorkspace = state.workspaces.find(
-            (w) => w.code === data.workspace.code,
-          );
-          
-          if (existingWorkspace) {
-            // Just join existing workspace
-            return get().joinWorkspace(data.workspace.code, collaboratorName);
-          }
-
-          // Create new collaborator
-          const collaborator: Collaborator = {
-            id: uuidv4(),
-            name: collaboratorName,
-            initials: collaboratorName
-              .split(" ")
-              .map((n) => n[0])
-              .join("")
-              .toUpperCase()
-              .substring(0, 2),
-            color: THEME_COLORS[Math.floor(Math.random() * THEME_COLORS.length)],
-            joinedAt: new Date(),
-            lastActive: new Date(),
-          };
-
-          // Import workspace with new collaborator
-          const importedWorkspace: Workspace = {
-            ...data.workspace,
-            collaborators: [...data.workspace.collaborators, collaborator],
-          };
-
-          // Import studies
-          const importedStudies: Study[] = data.studies || [];
-
-          set((state) => ({
-            workspaces: [...state.workspaces, importedWorkspace],
-            studies: [...state.studies, ...importedStudies],
-            activeWorkspaceId: importedWorkspace.id,
-            currentCollaborator: collaborator,
-          }));
-
-          return importedWorkspace;
-        } catch (error) {
-          console.error("Failed to import workspace:", error);
-          return null;
-        }
       },
 
       setActiveWorkspace: (id) => {
