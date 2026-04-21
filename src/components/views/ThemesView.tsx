@@ -119,7 +119,7 @@ export function ThemesView() {
   }>({ open: false, parentTheme: null });
   const [themeSearchQuery, setThemeSearchQuery] = useState("");
   const themeSearchInputRef = useRef<HTMLInputElement>(null);
-  
+
   // Theme dragging state (separate from code dragging)
   const [draggedTheme, setDraggedTheme] = useState<Theme | null>(null);
   const [themeDropTarget, setThemeDropTarget] = useState<{
@@ -392,7 +392,10 @@ export function ThemesView() {
   // Theme dragging handlers
   const handleThemeDragStart = (theme: Theme) => {
     setDraggedTheme(theme);
-    console.log("[THEME DRAG START]", { theme: theme.name, level: theme.level });
+    console.log("[THEME DRAG START]", {
+      theme: theme.name,
+      level: theme.level,
+    });
   };
 
   const handleThemeDragOver = (
@@ -402,24 +405,27 @@ export function ThemesView() {
   ) => {
     e.preventDefault();
     e.stopPropagation();
-    
+
     if (!draggedTheme) return;
-    
+
     // Prevent dropping on itself
     if (draggedTheme.id === targetTheme.id) return;
-    
+
     // Prevent circular nesting (can't nest parent under its own child/grandchild)
-    const isDescendant = (potentialParent: Theme, potentialChild: Theme): boolean => {
+    const isDescendant = (
+      potentialParent: Theme,
+      potentialChild: Theme,
+    ): boolean => {
       if (potentialParent.parentId === potentialChild.id) return true;
       const parent = themes.find((t) => t.id === potentialParent.parentId);
       return parent ? isDescendant(parent, potentialChild) : false;
     };
-    
+
     if (isDescendant(targetTheme, draggedTheme)) {
       console.log("⚠️ Cannot nest parent under child");
       return;
     }
-    
+
     // Determine action based on target and area
     if (area === "header") {
       // Dropping ON a theme header = nest as subtheme
@@ -438,31 +444,28 @@ export function ThemesView() {
     setThemeDropTarget(null);
   };
 
-  const handleThemeDrop = (
-    e: React.DragEvent,
-    targetTheme?: Theme,
-  ) => {
+  const handleThemeDrop = (e: React.DragEvent, targetTheme?: Theme) => {
     e.preventDefault();
     e.stopPropagation();
-    
+
     if (!draggedTheme || !themeDropTarget) return;
-    
+
     if (themeDropTarget.action === "nest" && targetTheme) {
       // Nest under target theme
       const newLevel: Theme["level"] =
         targetTheme.level === "main" ? "theme" : "subtheme";
-      
+
       updateTheme(draggedTheme.id, {
         parentId: targetTheme.id,
         level: newLevel,
       });
-      
+
       console.log("[THEME NESTED]", {
         theme: draggedTheme.name,
         under: targetTheme.name,
         newLevel,
       });
-      
+
       toast({
         title: "Theme reorganized",
         description: `"${draggedTheme.name}" is now under "${targetTheme.name}"`,
@@ -474,16 +477,16 @@ export function ThemesView() {
         parentId: null,
         level: "main",
       });
-      
+
       console.log("[THEME TO MAIN]", { theme: draggedTheme.name });
-      
+
       toast({
         title: "Theme promoted",
         description: `"${draggedTheme.name}" is now a main theme`,
         duration: 2000,
       });
     }
-    
+
     setDraggedTheme(null);
     setThemeDropTarget(null);
   };
@@ -515,7 +518,8 @@ export function ThemesView() {
           className={cn(
             "rounded-lg border bg-card transition-all relative",
             isCodeDropTarget && "border-accent border-2 shadow-lg",
-            isThemeDropTarget && "border-primary border-2 shadow-lg ring-2 ring-primary/20",
+            isThemeDropTarget &&
+              "border-primary border-2 shadow-lg ring-2 ring-primary/20",
             isDragging && "opacity-50",
             levelStyles[theme.level],
           )}
@@ -548,7 +552,7 @@ export function ThemesView() {
               </div>
             </div>
           )}
-          
+
           {/* Theme Drop Indicator */}
           {isThemeDropTarget && themeDropTarget?.action === "nest" && (
             <div className="absolute inset-0 bg-primary/5 rounded-lg pointer-events-none flex items-center justify-center z-10">
@@ -948,7 +952,8 @@ export function ThemesView() {
         <div
           className={cn(
             "flex-1 overflow-auto scrollbar-thin space-y-3 p-2 rounded-lg transition-all",
-            themeDropTarget?.action === "main" && "bg-primary/5 ring-2 ring-primary/30"
+            themeDropTarget?.action === "main" &&
+              "bg-primary/5 ring-2 ring-primary/30",
           )}
           onDragOver={(e) => {
             if (draggedTheme) {
@@ -971,7 +976,7 @@ export function ThemesView() {
               </div>
             </div>
           )}
-          
+
           {mainThemes.map((theme) => renderThemeCard(theme))}
 
           {themes.length === 0 && (

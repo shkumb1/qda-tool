@@ -5,6 +5,7 @@ import { CodesView } from "@/components/views/CodesView";
 import { RefinerView } from "@/components/views/RefinerView";
 import { ThemesView } from "@/components/views/ThemesView";
 import { VisualizationsView } from "@/components/views/VisualizationsView";
+import { IntelligenceLibrary } from "@/components/views/IntelligenceLibrary";
 import { AnalyticsView } from "@/components/views/AnalyticsView";
 import { StudiesDashboard } from "@/components/views/StudiesDashboard";
 import { WelcomeView } from "@/components/views/WelcomeView";
@@ -159,6 +160,8 @@ const Index = () => {
         return <ThemesView />;
       case "visualizations":
         return <VisualizationsView />;
+      case "intelligence":
+        return <IntelligenceLibrary />;
       case "analytics":
         return <AnalyticsView />;
       default:

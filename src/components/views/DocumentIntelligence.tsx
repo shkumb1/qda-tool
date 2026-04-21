@@ -16,6 +16,7 @@ import {
   Network,
   Check,
   Download,
+  Save,
   ChevronRight,
   Zap,
   Target,
@@ -69,13 +70,14 @@ export function DocumentIntelligence({
   onOpenChange,
 }: DocumentIntelligenceProps) {
   const { toast } = useToast();
-  const { addTheme, updateTheme, documents: studyDocuments } = useQDAStore();
+  const { addTheme, updateTheme, documents: studyDocuments, saveIntelligence } = useQDAStore();
   const [analysis, setAnalysis] = useState<DocIntel | null>(null);
   const [loading, setLoading] = useState(false);
   const [selectedNode, setSelectedNode] = useState<MindMapNode | null>(null);
   const [createdThemes, setCreatedThemes] = useState<Set<string>>(new Set());
   const [analysisDepth, setAnalysisDepth] = useState<AnalysisDepth>("standard");
   const [analysisScope, setAnalysisScope] = useState<AnalysisScope>("current");
+  const [saved, setSaved] = useState(false); // Track if current analysis is saved
 
   // Get available documents for study-wide analysis
   const availableDocuments = studyDocuments.filter((doc) => doc.content && doc.content.trim().length > 0);
@@ -119,6 +121,7 @@ export function DocumentIntelligence({
       }
       
       setAnalysis(result);
+      setSaved(false); // Reset saved state on new analysis
     } catch (error) {
       console.error("Analysis error:", error);
       toast({
@@ -133,6 +136,38 @@ export function DocumentIntelligence({
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSaveAnalysis = () => {
+    if (!analysis) return;
+    
+    const documentIds = analysisScope === "all" 
+      ? availableDocuments.map(d => d.id)
+      : [documentId];
+    
+    const title = analysisScope === "all"
+      ? `Study Analysis (${availableDocuments.length} documents)`
+      : documentTitle;
+    
+    saveIntelligence(
+      title,
+      analysisScope,
+      documentIds,
+      analysisDepth,
+      {
+        summary: analysis.summary,
+        themes: analysis.themes,
+        keyInsights: analysis.keyInsights,
+        mindMap: analysis.mindMap,
+      }
+    );
+    
+    setSaved(true);
+    toast({
+      title: "Analysis saved",
+      description: "You can access this later from the Intelligence Library",
+      duration: 3000,
+    });
   };
 
   const handleCreateThemeFromNode = (themeData: ThemeNode) => {
@@ -258,15 +293,36 @@ export function DocumentIntelligence({
             </div>
             <div className="flex gap-2 mr-8">
               {analysis && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleExportAnalysis}
-                  className="gap-2"
-                >
-                  <Download className="h-4 w-4" />
-                  Export
-                </Button>
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleSaveAnalysis}
+                    disabled={saved}
+                    className="gap-2"
+                  >
+                    {saved ? (
+                      <>
+                        <Check className="h-4 w-4" />
+                        Saved
+                      </>
+                    ) : (
+                      <>
+                        <Save className="h-4 w-4" />
+                        Save
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleExportAnalysis}
+                    className="gap-2"
+                  >
+                    <Download className="h-4 w-4" />
+                    Export
+                  </Button>
+                </>
               )}
 
               {analysis && (

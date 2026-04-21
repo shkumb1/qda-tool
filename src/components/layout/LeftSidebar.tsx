@@ -21,6 +21,7 @@ import {
   Plus,
   Database,
   LineChart,
+  Brain,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -75,6 +76,12 @@ const NAV_ITEMS = [
     label: "Visualizations",
     icon: BarChart3,
     tooltip: "Explore data visually",
+  },
+  {
+    id: "intelligence",
+    label: "Intelligence",
+    icon: Brain,
+    tooltip: "Saved AI analyses",
   },
   {
     id: "analytics",

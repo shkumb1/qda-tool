@@ -475,6 +475,20 @@ Format as JSON:
 
 export type AnalysisDepth = "quick" | "standard" | "deep";
 
+export interface StudyContext {
+  studyTitle: string;
+  documentCount: number;
+  codeCount: number;
+  themeCount: number;
+  excerptCount: number;
+  topCodes: string[];
+  themes: {
+    name: string;
+    level: string;
+    codeCount: number;
+  }[];
+}
+
 export async function analyzeDocument(
   documentTitle: string,
   documentContent: string,
@@ -655,5 +669,73 @@ ${config.levels >= 3 ? `- Sub-themes can have 1-2 concept nodes for granular det
 
     // Generic error
     throw new Error("Document analysis failed unexpectedly. Please try again.");
+  }
+}
+
+/**
+ * Chat with QDA-focused AI Assistant
+ * STRICTLY LIMITED to qualitative data analysis topics and tool usage
+ */
+export async function chatWithAssistant(
+  userMessage: string,
+  studyContext: StudyContext | null,
+  conversationHistory: { role: string; content: string }[] = [],
+): Promise<string> {
+  const systemPrompt = `You are a specialized AI assistant for a Qualitative Data Analysis (QDA) tool called "Insight Weaver". 
+
+**STRICT RULES - YOU MUST FOLLOW THESE:**
+1. ONLY answer questions about qualitative data analysis, coding, theming, and this QDA tool
+2. REFUSE to answer questions about unrelated topics (politics, recipes, general knowledge, etc.)
+3. If asked something unrelated, politely redirect to QDA topics
+4. Be concise but helpful
+5. Reference the user's current study data when relevant
+
+**ALLOWED TOPICS:**
+- QDA methodology and best practices
+- Coding strategies (open, axial, selective coding)
+- Theme development and analysis
+- How to use features in this tool (codes, themes, documents, excerpts, visualizations)
+- Interpreting patterns in the user's data
+- Research questions and analytical approaches
+- Grounded theory, thematic analysis, content analysis
+- Code hierarchies, code merging, code refinement
+
+**FORBIDDEN TOPICS:**
+- Anything not related to qualitative research or this tool
+- Medical advice, legal advice, financial advice
+- Politics, current events, entertainment
+- Personal opinions on non-research topics
+
+**CURRENT STUDY CONTEXT:**
+${studyContext ? `
+Study: ${studyContext.studyTitle || "Untitled Study"}
+Documents: ${studyContext.documentCount}
+Codes: ${studyContext.codeCount}
+Themes: ${studyContext.themeCount}
+Excerpts: ${studyContext.excerptCount}
+
+Top Codes: ${studyContext.topCodes?.join(", ") || "None yet"}
+
+Themes: ${studyContext.themes?.map((t) => `${t.name} (${t.level}, ${t.codeCount} codes)`).join(", ") || "None yet"}
+` : "No active study"}
+
+**YOUR TONE:**
+- Professional but friendly
+- Educational and supportive
+- Encouraging good QDA practices
+- Specific and actionable`;
+
+  const messages = [
+    { role: "system", content: systemPrompt },
+    ...conversationHistory.slice(-10), // Keep last 10 messages for context
+    { role: "user", content: userMessage },
+  ];
+
+  try {
+    const response = await callOpenAI(messages, 0.7, false, 500);
+    return response;
+  } catch (error) {
+    console.error("AI Assistant chat error:", error);
+    throw error;
   }
 }

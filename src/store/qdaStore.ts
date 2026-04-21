@@ -7,6 +7,7 @@ import type {
   Theme,
   CodeExcerpt,
   Memo,
+  SavedIntelligence,
   TextSelection,
   CodeLevel,
   Study,
@@ -35,6 +36,7 @@ interface QDAState {
   themes: Theme[];
   excerpts: CodeExcerpt[];
   memos: Memo[];
+  intelligenceReports: SavedIntelligence[];
 
   // UI State
   activeDocumentId: string | null;
@@ -45,6 +47,7 @@ interface QDAState {
     | "refiner"
     | "themes"
     | "visualizations"
+    | "intelligence"
     | "analytics";
   selectedExcerptId: string | null;
   selectedCodeId: string | null;
@@ -62,6 +65,8 @@ interface QDAState {
   // Workspace actions
   createWorkspace: (name: string, collaboratorName: string) => Workspace;
   joinWorkspace: (code: string, collaboratorName: string) => Workspace | null;
+  importWorkspaceData: (workspaceData: string, collaboratorName: string) => Workspace | null;
+  exportWorkspaceData: () => string | null;
   setActiveWorkspace: (id: string | null) => void;
   leaveWorkspace: () => void;
   getActiveWorkspace: () => Workspace | null;
@@ -149,6 +154,21 @@ interface QDAState {
   updateMemo: (id: string, content: string) => void;
   deleteMemo: (id: string) => void;
 
+  // Intelligence actions
+  saveIntelligence: (
+    title: string,
+    scope: "document" | "study",
+    documentIds: string[],
+    depth: "quick" | "standard" | "deep",
+    analysis: {
+      summary: string;
+      themes: any[];
+      keyInsights: any;
+      mindMap: any;
+    },
+  ) => SavedIntelligence;
+  deleteIntelligence: (id: string) => void;
+
   // UI actions
   setActiveView: (view: QDAState["activeView"]) => void;
   setSelectedExcerpt: (id: string | null) => void;
@@ -220,6 +240,7 @@ const syncActiveStudy = (state: QDAState) => {
       themes: activeStudy.themes,
       excerpts: activeStudy.excerpts,
       memos: activeStudy.memos,
+      intelligenceReports: activeStudy.intelligenceReports || [],
     };
   }
   return {
@@ -228,6 +249,7 @@ const syncActiveStudy = (state: QDAState) => {
     themes: [],
     excerpts: [],
     memos: [],
+    intelligenceReports: [],
   };
 };
 
@@ -245,7 +267,7 @@ const getWorkspaceStudies = (state: QDAState) => {
 const updateActiveStudyData = (
   state: QDAState,
   updates: Partial<
-    Pick<Study, "documents" | "codes" | "themes" | "excerpts" | "memos">
+    Pick<Study, "documents" | "codes" | "themes" | "excerpts" | "memos" | "intelligenceReports">
   >,
 ) => {
   if (!state.activeStudyId) return state;
@@ -281,6 +303,7 @@ export const useQDAStore = create<QDAState>()(
       themes: [],
       excerpts: [],
       memos: [],
+      intelligenceReports: [],
       activeDocumentId: null,
       activeView: "dashboard",
       selectedExcerptId: null,
@@ -360,6 +383,84 @@ export const useQDAStore = create<QDAState>()(
         }));
 
         return workspace;
+      },
+
+      exportWorkspaceData: () => {
+        const state = get();
+        const workspace = state.getActiveWorkspace();
+        if (!workspace) return null;
+
+        const workspaceStudies = state.getWorkspaceStudies();
+        const exportData = {
+          workspace: {
+            ...workspace,
+            // Don't export collaborators - they'll be recreated on import
+            collaborators: [workspace.collaborators.find(c => c.id === workspace.createdBy)].filter(Boolean),
+          },
+          studies: workspaceStudies,
+          exportedAt: new Date().toISOString(),
+          version: "1.0",
+        };
+
+        return JSON.stringify(exportData, null, 2);
+      },
+
+      importWorkspaceData: (workspaceData, collaboratorName) => {
+        try {
+          const data = JSON.parse(workspaceData);
+          if (!data.workspace || !data.workspace.code) {
+            console.error("Invalid workspace data");
+            return null;
+          }
+
+          const state = get();
+          
+          // Check if workspace already exists
+          const existingWorkspace = state.workspaces.find(
+            (w) => w.code === data.workspace.code,
+          );
+          
+          if (existingWorkspace) {
+            // Just join existing workspace
+            return get().joinWorkspace(data.workspace.code, collaboratorName);
+          }
+
+          // Create new collaborator
+          const collaborator: Collaborator = {
+            id: uuidv4(),
+            name: collaboratorName,
+            initials: collaboratorName
+              .split(" ")
+              .map((n) => n[0])
+              .join("")
+              .toUpperCase()
+              .substring(0, 2),
+            color: THEME_COLORS[Math.floor(Math.random() * THEME_COLORS.length)],
+            joinedAt: new Date(),
+            lastActive: new Date(),
+          };
+
+          // Import workspace with new collaborator
+          const importedWorkspace: Workspace = {
+            ...data.workspace,
+            collaborators: [...data.workspace.collaborators, collaborator],
+          };
+
+          // Import studies
+          const importedStudies: Study[] = data.studies || [];
+
+          set((state) => ({
+            workspaces: [...state.workspaces, importedWorkspace],
+            studies: [...state.studies, ...importedStudies],
+            activeWorkspaceId: importedWorkspace.id,
+            currentCollaborator: collaborator,
+          }));
+
+          return importedWorkspace;
+        } catch (error) {
+          console.error("Failed to import workspace:", error);
+          return null;
+        }
       },
 
       setActiveWorkspace: (id) => {
@@ -458,6 +559,7 @@ export const useQDAStore = create<QDAState>()(
           themes: [],
           excerpts: [],
           memos: [],
+          intelligenceReports: [],
         };
 
         set((state) => {
@@ -653,6 +755,13 @@ export const useQDAStore = create<QDAState>()(
           frequency: 0,
           documentCount: 0,
         };
+        
+        console.log("[STORE] Creating new code:", {
+          name: newCode.name,
+          id: newCode.id,
+          frequency: newCode.frequency,
+        });
+        
         set((state) =>
           updateActiveStudyData(state, {
             codes: [...state.codes, newCode],
@@ -795,12 +904,23 @@ export const useQDAStore = create<QDAState>()(
                   .filter((e) => newExcerptIds.includes(e.id))
                   .map((e) => e.documentId),
               );
-              return {
+              
+              const updatedCode = {
                 ...code,
                 excerptIds: newExcerptIds,
                 frequency: newExcerptIds.length,
                 documentCount: docIds.size,
               };
+              
+              console.log("[STORE] Updated code in addExcerpt:", {
+                name: code.name,
+                id: code.id,
+                oldFrequency: code.frequency,
+                newFrequency: updatedCode.frequency,
+                excerptCount: newExcerptIds.length,
+              });
+              
+              return updatedCode;
             }
             return code;
           });
@@ -1198,6 +1318,43 @@ export const useQDAStore = create<QDAState>()(
             memos: state.memos.filter((m) => m.id !== id),
           }),
         );
+      },
+
+      // Intelligence actions
+      saveIntelligence: (title, scope, documentIds, depth, analysis) => {
+        if (!get().activeStudyId) return {} as SavedIntelligence;
+        
+        const newReport: SavedIntelligence = {
+          id: uuidv4(),
+          title,
+          scope,
+          documentIds,
+          depth,
+          createdAt: new Date(),
+          summary: analysis.summary,
+          themes: analysis.themes,
+          keyInsights: analysis.keyInsights,
+          mindMap: analysis.mindMap,
+        };
+        
+        set((state) =>
+          updateActiveStudyData(state, {
+            intelligenceReports: [...state.intelligenceReports, newReport],
+          }),
+        );
+        
+        console.log("[INTELLIGENCE] Saved analysis:", newReport.title);
+        return newReport;
+      },
+
+      deleteIntelligence: (id) => {
+        if (!get().activeStudyId) return;
+        set((state) =>
+          updateActiveStudyData(state, {
+            intelligenceReports: state.intelligenceReports.filter((r) => r.id !== id),
+          }),
+        );
+        console.log("[INTELLIGENCE] Deleted analysis:", id);
       },
 
       // UI actions
@@ -1745,6 +1902,7 @@ export const useQDAStore = create<QDAState>()(
             state.themes = activeStudy.themes;
             state.excerpts = activeStudy.excerpts;
             state.memos = activeStudy.memos;
+            state.intelligenceReports = activeStudy.intelligenceReports || [];
           }
         }
       },

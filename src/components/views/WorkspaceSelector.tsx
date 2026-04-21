@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQDAStore } from "@/store/qdaStore";
 import { useHelpStore } from "@/store/helpStore";
 import {
@@ -9,6 +9,8 @@ import {
   Copy,
   Check,
   Trash2,
+  Download,
+  Upload,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,11 +44,14 @@ export function WorkspaceSelector() {
     setActiveWorkspace,
     createWorkspace,
     joinWorkspace,
+    importWorkspaceData,
+    exportWorkspaceData,
     clearLegacyStudies,
   } = useQDAStore();
   const { setShowOnboarding } = useHelpStore();
 
   const { toast } = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [joinDialogOpen, setJoinDialogOpen] = useState(false);
   const [showLegacyAlert, setShowLegacyAlert] = useState(false);
@@ -54,6 +59,7 @@ export function WorkspaceSelector() {
   const [collaboratorName, setCollaboratorName] = useState("");
   const [joinCode, setJoinCode] = useState("");
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
+  const [workspaceFile, setWorkspaceFile] = useState<File | null>(null);
 
   // Check for legacy studies (studies not in any workspace)
   useEffect(() => {
@@ -112,11 +118,56 @@ export function WorkspaceSelector() {
     });
   };
 
-  const handleJoinWorkspace = () => {
-    if (!joinCode.trim() || !collaboratorName.trim()) {
+  const handleJoinWorkspace = async () => {
+    if (!collaboratorName.trim()) {
       toast({
         title: "Missing information",
-        description: "Please provide both workspace code and your name.",
+        description: "Please provide your name.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Try importing from file first if provided
+    if (workspaceFile) {
+      try {
+        const fileContent = await workspaceFile.text();
+        const workspace = importWorkspaceData(fileContent, collaboratorName);
+        
+        if (!workspace) {
+          toast({
+            title: "Import failed",
+            description: "Invalid workspace file. Please check the file and try again.",
+            variant: "destructive",
+          });
+          return;
+        }
+
+        setJoinDialogOpen(false);
+        setJoinCode("");
+        setCollaboratorName("");
+        setWorkspaceFile(null);
+        
+        toast({
+          title: "Joined workspace!",
+          description: `Welcome to "${workspace.name}"`,
+        });
+        return;
+      } catch (error) {
+        toast({
+          title: "Import failed",
+          description: "Failed to read workspace file.",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
+    // Fallback to code-based join (only works locally)
+    if (!joinCode.trim()) {
+      toast({
+        title: "Missing information",
+        description: "Please upload a workspace file or enter a workspace code.",
         variant: "destructive",
       });
       return;
@@ -126,7 +177,7 @@ export function WorkspaceSelector() {
     if (!workspace) {
       toast({
         title: "Workspace not found",
-        description: "Invalid workspace code. Please check and try again.",
+        description: "Workspace code not found locally. Ask your collaborator to share the workspace file instead.",
         variant: "destructive",
       });
       return;
@@ -139,6 +190,52 @@ export function WorkspaceSelector() {
       title: "Joined workspace!",
       description: `Welcome to "${workspace.name}"`,
     });
+  };
+
+  const handleExportWorkspace = (workspaceId: string, workspaceName: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    
+    // Set active workspace temporarily to export it
+    const currentActive = useQDAStore.getState().activeWorkspaceId;
+    setActiveWorkspace(workspaceId);
+    
+    const data = exportWorkspaceData();
+    
+    // Restore previous active workspace
+    setActiveWorkspace(currentActive);
+    
+    if (!data) {
+      toast({
+        title: "Export failed",
+        description: "Failed to export workspace data.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Download as JSON file
+    const blob = new Blob([data], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `workspace-${workspaceName.replace(/\s+/g, "-").toLowerCase()}-${Date.now()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    toast({
+      title: "Workspace exported!",
+      description: "Share this file with collaborators to let them join.",
+      duration: 5000,
+    });
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setWorkspaceFile(file);
+    }
   };
 
   const handleCopyCode = (code: string) => {
@@ -285,6 +382,16 @@ export function WorkspaceSelector() {
                           </>
                         )}
                       </Button>
+
+                      {/* Export Workspace */}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={(e) => handleExportWorkspace(workspace.id, workspace.name, e)}
+                        title="Export workspace to share with collaborators"
+                      >
+                        <Download className="h-4 w-4 mr-2" /> Share
+                      </Button>
                     </div>
                   </div>
                 </Card>
@@ -346,10 +453,70 @@ export function WorkspaceSelector() {
             <DialogHeader>
               <DialogTitle>Join Workspace</DialogTitle>
               <DialogDescription>
-                Enter the 6-character workspace code shared by your team
+                Upload the workspace file shared by your team or enter the workspace code (code only works locally)
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
+              <div>
+                <Label htmlFor="your-name-join">Your Name</Label>
+                <Input
+                  id="your-name-join"
+                  placeholder="e.g., Dr. Sarah Smith"
+                  value={collaboratorName}
+                  onChange={(e) => setCollaboratorName(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleJoinWorkspace()}
+                />
+              </div>
+
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-background px-2 text-muted-foreground">
+                    Recommended Method
+                  </span>
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="workspace-file">Upload Workspace File</Label>
+                <div className="mt-2">
+                  <input
+                    ref={fileInputRef}
+                    id="workspace-file"
+                    type="file"
+                    accept=".json"
+                    onChange={handleFileChange}
+                    className="hidden"
+                  />
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <Upload className="h-4 w-4 mr-2" />
+                    {workspaceFile ? workspaceFile.name : "Choose workspace file..."}
+                  </Button>
+                  {workspaceFile && (
+                    <p className="text-xs text-muted-foreground mt-2">
+                      File selected: {workspaceFile.name}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-background px-2 text-muted-foreground">
+                    Or (Local Only)
+                  </span>
+                </div>
+              </div>
+
               <div>
                 <Label htmlFor="join-code">Workspace Code</Label>
                 <Input
@@ -361,22 +528,18 @@ export function WorkspaceSelector() {
                   className="font-mono text-lg uppercase"
                   maxLength={6}
                 />
-              </div>
-              <div>
-                <Label htmlFor="your-name-join">Your Name</Label>
-                <Input
-                  id="your-name-join"
-                  placeholder="e.g., Dr. Sarah Smith"
-                  value={collaboratorName}
-                  onChange={(e) => setCollaboratorName(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleJoinWorkspace()}
-                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Note: Code only works if workspace was created on this device
+                </p>
               </div>
             </div>
             <DialogFooter>
               <Button
                 variant="outline"
-                onClick={() => setJoinDialogOpen(false)}
+                onClick={() => {
+                  setJoinDialogOpen(false);
+                  setWorkspaceFile(null);
+                }}
               >
                 Cancel
               </Button>

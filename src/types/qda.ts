@@ -101,6 +101,29 @@ export type StudyStatus =
   | "writing"
   | "completed";
 
+export interface SavedIntelligence {
+  id: string;
+  title: string; // Document title or "Study Analysis (X documents)"
+  scope: "document" | "study"; // Single document or study-wide
+  documentIds: string[]; // Related document IDs
+  depth: "quick" | "standard" | "deep"; // Analysis depth used
+  createdAt: Date;
+  // Analysis results
+  summary: string;
+  themes: {
+    name: string;
+    description: string;
+    subThemes?: { name: string; description: string }[];
+    confidence: number;
+  }[];
+  keyInsights: {
+    mainPoints: string[];
+    keyQuotes: { text: string; relevance: string }[];
+    patterns: string[];
+  };
+  mindMap: any; // MindMapNode structure
+}
+
 export interface Study {
   id: string;
   title: string;
@@ -118,6 +141,7 @@ export interface Study {
   themes: Theme[];
   excerpts: CodeExcerpt[];
   memos: Memo[];
+  intelligenceReports: SavedIntelligence[]; // Saved Document Intelligence analyses
 }
 
 export interface StudyStatistics {
